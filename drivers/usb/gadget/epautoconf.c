@@ -265,31 +265,24 @@ struct usb_ep * __init usb_ep_autoconfig (
 				return ep;
 		}
 
-	} else if (gadget_is_sh (gadget) && USB_ENDPOINT_XFER_INT == type) {
-		/* single buffering is enough; maybe 8 byte fifo is too */
-		ep = find_ep (gadget, "ep3in-bulk");
+#ifdef CONFIG_BLACKFIN
+	} else if (gadget_is_musbhsfc(gadget) || gadget_is_musbhdrc(gadget)) {
+		if ((USB_ENDPOINT_XFER_BULK == type) ||
+		    (USB_ENDPOINT_XFER_ISOC == type)) {
+			if (USB_DIR_IN & desc->bEndpointAddress)
+				ep = find_ep (gadget, "ep5in");
+			else
+				ep = find_ep (gadget, "ep6out");
+		} else if (USB_ENDPOINT_XFER_INT == type) {
+			if (USB_DIR_IN & desc->bEndpointAddress)
+				ep = find_ep(gadget, "ep1in");
+			else
+				ep = find_ep(gadget, "ep2out");
+		} else
+			ep = NULL;
 		if (ep && ep_matches (gadget, ep, desc))
 			return ep;
-
-	} else if (gadget_is_mq11xx (gadget) && USB_ENDPOINT_XFER_INT == type) {
-		ep = find_ep (gadget, "ep1-bulk");
-		if (ep && ep_matches (gadget, ep, desc))
-			return ep;
-
-	} else if (gadget_is_pd12 (gadget)) {
-		if (USB_ENDPOINT_XFER_BULK == type
-				&& (USB_DIR_IN & desc->bEndpointAddress)) {
-			/* single buffering is enough */
-			ep = find_ep (gadget, "ep2in-bulk");
-			if (ep && ep_matches (gadget, ep, desc))
-				return ep;
-		} else if (USB_ENDPOINT_XFER_BULK == type
-				&& (USB_DIR_OUT & desc->bEndpointAddress)) {
-			/* DMA may be available */
-			ep = find_ep (gadget, "ep1out-bulk");
-			if (ep && ep_matches (gadget, ep, desc))
-				return ep;
-		}
+#endif
 	}
 
 	/* Second, look at endpoints until an unclaimed one looks usable */
