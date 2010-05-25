@@ -370,25 +370,16 @@ struct slowpath_args {
 static void warn_slowpath_common(const char *file, int line, void *caller,
 				 unsigned taint, struct slowpath_args *args)
 {
-	va_list args;
-	char function[KSYM_SYMBOL_LEN];
-	unsigned long caller = (unsigned long)__builtin_return_address(0);
 	const char *board;
 
-	sprint_symbol(function, caller);
-
 	printk(KERN_WARNING "------------[ cut here ]------------\n");
-	printk(KERN_WARNING "WARNING: at %s:%d %s()\n", file,
-		line, function);
+	printk(KERN_WARNING "WARNING: at %s:%d %pS()\n", file, line, caller);
 	board = dmi_get_system_info(DMI_PRODUCT_NAME);
 	if (board)
 		printk(KERN_WARNING "Hardware name: %s\n", board);
 
-	if (*fmt) {
-		va_start(args, fmt);
-		vprintk(fmt, args);
-		va_end(args);
-	}
+	if (args)
+		vprintk(args->fmt, args->args);
 
 	print_modules();
 	dump_stack();
