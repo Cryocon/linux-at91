@@ -735,11 +735,11 @@ struct xattr_handler *reiserfs_xattr_handlers[] = {
 			(handler) = *(handlers)++)
 
 /* This is the implementation for the xattr plugin infrastructure */
-static inline struct xattr_handler *
-find_xattr_handler_prefix(struct xattr_handler **handlers,
+static inline const struct xattr_handler *
+find_xattr_handler_prefix(const struct xattr_handler **handlers,
 			   const char *name)
 {
-	struct xattr_handler *xah;
+	const struct xattr_handler *xah;
 
 	if (!handlers)
 		return NULL;
@@ -760,7 +760,7 @@ ssize_t
 reiserfs_getxattr(struct dentry * dentry, const char *name, void *buffer,
 		  size_t size)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	handler = find_xattr_handler_prefix(dentry->d_sb->s_xattr, name);
 
@@ -779,7 +779,7 @@ int
 reiserfs_setxattr(struct dentry *dentry, const char *name, const void *value,
 		  size_t size, int flags)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	handler = find_xattr_handler_prefix(dentry->d_sb->s_xattr, name);
 
@@ -796,7 +796,7 @@ reiserfs_setxattr(struct dentry *dentry, const char *name, const void *value,
  */
 int reiserfs_removexattr(struct dentry *dentry, const char *name)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 	handler = find_xattr_handler_prefix(dentry->d_sb->s_xattr, name);
 
 	if (!handler || get_inode_sd_version(dentry->d_inode) == STAT_DATA_V1)
@@ -819,7 +819,7 @@ static int listxattr_filler(void *buf, const char *name, int namelen,
 	size_t size;
 	if (name[0] != '.' ||
 	    (namelen != 1 && (name[1] != '.' || namelen != 2))) {
-		struct xattr_handler *handler;
+		const struct xattr_handler *handler;
 		handler = find_xattr_handler_prefix(b->dentry->d_sb->s_xattr,
 						    name);
 		if (!handler)	/* Unsupported xattr name */
@@ -941,6 +941,28 @@ static int create_privroot(struct dentry *dentry)
 
 	return 0;
 }
+
+#else
+int __init reiserfs_xattr_register_handlers(void) { return 0; }
+void reiserfs_xattr_unregister_handlers(void) {}
+static int create_privroot(struct dentry *dentry) { return 0; }
+#endif
+
+/* Actual operations that are exported to VFS-land */
+const struct xattr_handler *reiserfs_xattr_handlers[] = {
+#ifdef CONFIG_REISERFS_FS_XATTR
+	&reiserfs_xattr_user_handler,
+	&reiserfs_xattr_trusted_handler,
+#endif
+#ifdef CONFIG_REISERFS_FS_SECURITY
+	&reiserfs_xattr_security_handler,
+#endif
+#ifdef CONFIG_REISERFS_FS_POSIX_ACL
+	&reiserfs_posix_acl_access_handler,
+	&reiserfs_posix_acl_default_handler,
+#endif
+	NULL
+};
 
 static int xattr_mount_check(struct super_block *s)
 {

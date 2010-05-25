@@ -582,7 +582,8 @@ int ds1307_set_rtc_time(struct rtc_time *t)
 #define NVRAM_SIZE	56
 
 static ssize_t
-ds1307_nvram_read(struct kobject *kobj, struct bin_attribute *attr,
+ds1307_nvram_read(struct file *filp, struct kobject *kobj,
+		struct bin_attribute *attr,
 		char *buf, loff_t off, size_t count)
 {
 	struct i2c_client	*client;
@@ -606,7 +607,8 @@ ds1307_nvram_read(struct kobject *kobj, struct bin_attribute *attr,
 }
 
 static ssize_t
-ds1307_nvram_write(struct kobject *kobj, struct bin_attribute *attr,
+ds1307_nvram_write(struct file *filp, struct kobject *kobj,
+		struct bin_attribute *attr,
 		char *buf, loff_t off, size_t count)
 {
 	struct i2c_client	*client;
