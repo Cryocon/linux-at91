@@ -1098,7 +1098,7 @@ static const struct amd_flash_info jedec_table[] = {
 			ERASEINFO(0x02000, 8),
 		}
         }, {
-		.mfr_id		= MANUFACTURER_INTEL,
+		.mfr_id		= CFI_MFR_INTEL,
 		.dev_id		= I28F640C3B,
 		.name		= "Intel 28F640C3B",
 		.devtypes	= CFI_DEVICETYPE_X16,
