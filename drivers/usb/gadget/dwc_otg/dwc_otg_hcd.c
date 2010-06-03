@@ -1797,7 +1797,7 @@ int dwc_otg_hcd_hub_control(struct usb_hcd *_hcd, u16 _typeReq, u16 _wValue,
 		if (hprt0.b.prtpwr)
 			port_status |= (1 << USB_PORT_FEAT_POWER);
 		if (hprt0.b.prtspd == DWC_HPRT0_PRTSPD_HIGH_SPEED)
-			port_status |= (1 << USB_PORT_FEAT_HIGHSPEED);
+			port_status |= USB_PORT_STAT_HIGH_SPEED;
 
 		else if (hprt0.b.prtspd == DWC_HPRT0_PRTSPD_LOW_SPEED)
 			port_status |= (1 << USB_PORT_FEAT_LOWSPEED);

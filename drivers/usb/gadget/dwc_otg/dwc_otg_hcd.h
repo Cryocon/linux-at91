@@ -36,7 +36,7 @@
 
 #include <linux/list.h>
 #include <linux/usb.h>
-#include <../drivers/usb/core/hcd.h>
+#include <linux/usb/hcd.h>
 
 struct lm_device;
 struct dwc_otg_device;

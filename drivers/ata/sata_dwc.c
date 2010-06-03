@@ -1427,8 +1427,8 @@ static int sata_dwc_port_start(struct ata_port *ap)
 	for (i = 0; i < SATA_DWC_QCMD_MAX; i++)
 		hsdevp->cmd_issued[i] = SATA_DWC_CMD_ISSUED_NOT;
 
-	ap->prd = 0;	/* set these so libata doesn't use them */
-	ap->prd_dma = 0;
+	ap->bmdma_prd = 0;	/* set these so libata doesn't use them */
+	ap->bmdma_prd_dma = 0;
 
 	/*
 	 * DMA - Assign scatter gather LLI table. We can't use the libata

@@ -55,7 +55,7 @@ static struct platform_device *ppc460ex_devs[] __initdata = {
 static int __devinit ppc460ex_sata_probe(struct of_device *ofdev,
 					 const struct of_device_id *match)
 {
-	struct device_node *np = ofdev->node;
+	struct device_node *np = ofdev->dev.of_node;
 	struct resource res;
 	const char *val;
 
@@ -112,8 +112,10 @@ static const struct of_device_id ppc460ex_sata_match[] = {
 };
 
 static struct of_platform_driver ppc460ex_sata_driver = {
-	.name = "sata-460ex",
-	.match_table = ppc460ex_sata_match,
+	.driver = {
+		.name = "sata-460ex",
+		.of_match_table = ppc460ex_sata_match,
+	},
 	.probe = ppc460ex_sata_probe,
 	.remove = ppc460ex_sata_remove,
 };

@@ -52,7 +52,7 @@ static struct platform_device usb_otg_device = {
 static int __devinit ppc4xx_usb_otg_probe(struct of_device *ofdev,
 					    const struct of_device_id *match)
 {
-	struct device_node *np = ofdev->node;
+	struct device_node *np = ofdev->dev.of_node;
 	struct resource res;
 
 	/*
@@ -92,8 +92,11 @@ static const struct of_device_id ppc4xx_usb_otg_match[] = {
 };
 
 static struct of_platform_driver ppc4xx_usb_otg_driver = {
-	.name = "ppc4xx-usb-otg",
-	.match_table = ppc4xx_usb_otg_match,
+	.driver = {
+		.name = "ppc4xx-usb-otg",
+		.owner = THIS_MODULE,
+		.of_match_table = ppc4xx_usb_otg_match,
+	},
 	.probe = ppc4xx_usb_otg_probe,
 	.remove = ppc4xx_usb_otg_remove,
 };
