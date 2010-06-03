@@ -102,8 +102,10 @@ EXPORT_SYMBOL(start_thread);
 EXPORT_SYMBOL(kernel_thread);
 
 #ifndef CONFIG_BOOKE
+#ifdef CONFIG_PPC_FPU
 EXPORT_SYMBOL_GPL(cvt_df);
 EXPORT_SYMBOL_GPL(cvt_fd);
+#endif
 #endif
 EXPORT_SYMBOL(giveup_fpu);
 #ifdef CONFIG_ALTIVEC
