@@ -171,7 +171,7 @@ static int __devinit fs_enet_mdio_probe(struct of_device *ofdev,
 
 	new_bus->name = "CPM2 Bitbanged MII",
 
-	ret = fs_mii_bitbang_init(new_bus, ofdev->node);
+	ret = fs_mii_bitbang_init(new_bus, ofdev->dev.of_node);
 	if (ret)
 		goto out_free_bus;
 
@@ -183,7 +183,7 @@ static int __devinit fs_enet_mdio_probe(struct of_device *ofdev,
 	new_bus->parent = &ofdev->dev;
 	dev_set_drvdata(&ofdev->dev, new_bus);
 
-	ret = of_mdiobus_register(new_bus, ofdev->node);
+	ret = of_mdiobus_register(new_bus, ofdev->dev.of_node);
 	if (ret)
 		goto out_free_irqs;
 
