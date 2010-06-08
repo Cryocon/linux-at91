@@ -39,8 +39,7 @@
 
 const int erratum_usb09_patched = 0;
 const int deferral_on = 1;
-int nak_deferral_delay = 20;
-module_param(nak_deferral_delay, int, 0644);
+const int nak_deferral_delay = 8;
 const int nyet_deferral_delay = 1;
 
 /** @file
@@ -747,8 +746,10 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 	     */
 	    goto cleanup;
 	case DWC_OTG_HC_XFER_NO_HALT_STATUS:
+#ifdef DEBUG
 		DWC_ERROR("%s: No halt_status, channel %d\n", __func__,
 			   _hc->hc_num);
+#endif	/*  */
 		free_qtd = 0;
 		break;
 	default:
@@ -1621,10 +1622,12 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 		    halt_channel(_hcd, _hc, _qtd,
 					 DWC_OTG_HC_XFER_PERIODIC_INCOMPLETE, must_free);
 		} else {
+#ifdef DEBUG
 			DWC_ERROR("%s: Channel %d, DMA Mode -- ChHltd set, but reason "
 			     "for halting is unknown, nyet %d, hcint 0x%08x, intsts 0x%08x\n",
 			     __func__, _hc->hc_num, hcint.b.nyet, hcint.d32,
 				 dwc_read_reg32(&_hcd->core_if->core_global_regs->gintsts));
+#endif
 		}
 	}
 }
