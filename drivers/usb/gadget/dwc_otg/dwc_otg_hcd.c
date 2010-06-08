@@ -998,13 +998,11 @@ done:
 	_urb->hcpriv = NULL;
 
     /* Higher layer software sets URB status. */
-	if (_status != -ECONNRESET) {
-		usb_hcd_unlink_urb_from_ep(_hcd, _urb);
-		usb_hcd_giveback_urb(_hcd, _urb, _status);
-		if (CHK_DEBUG_LEVEL(DBG_HCDV | DBG_HCD_URB)) {
-			DWC_PRINT("Called usb_hcd_giveback_urb()\n");
-			DWC_PRINT("  urb->status = %d\n", _status);
-		}
+	usb_hcd_unlink_urb_from_ep(_hcd, _urb);
+	usb_hcd_giveback_urb(_hcd, _urb, _status);
+	if (CHK_DEBUG_LEVEL(DBG_HCDV | DBG_HCD_URB)) {
+		DWC_PRINT("Called usb_hcd_giveback_urb()\n");
+		DWC_PRINT("  urb->status = %d\n", _status);
 	}
 	return 0;
 }
