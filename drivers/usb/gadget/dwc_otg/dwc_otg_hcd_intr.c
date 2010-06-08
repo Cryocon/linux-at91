@@ -756,7 +756,12 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 		free_qtd = 0;
 		break;
 	}
-	*must_free = free_qtd;
+	if (free_qtd) {
+		/* Only change must_free to true (do not set to zero here -- it is
+		 * pre-initialized to zero).
+		 */
+		*must_free = 1;
+	}
 	if (deact) {
 		deactivate_qh(_hcd, _hc->qh, free_qtd);
 	}
