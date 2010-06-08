@@ -701,6 +701,7 @@ static void release_channel(dwc_otg_hcd_t * _hcd,
 	dwc_otg_qh_t * _qh;
 	int deact = 1;
 	int retry_delay = 1;
+	unsigned long flags;
 
 	DWC_DEBUGPL(DBG_HCDV, "  %s: channel %d, halt_status %d\n", __func__,
 		      _hc->hc_num, _halt_status);
@@ -766,19 +767,9 @@ cleanup:
      */
     dwc_otg_hc_cleanup(_hcd->core_if, _hc);
 	list_add_tail(&_hc->hc_list_entry, &_hcd->free_hc_list);
-	switch (_hc->ep_type) {
-	case DWC_OTG_EP_TYPE_CONTROL:
-	case DWC_OTG_EP_TYPE_BULK:
-		_hcd->non_periodic_channels--;
-		break;
-	default:
-	    /*
-	     * Don't release reservations for periodic channels here.
-	     * That's done when a periodic transfer is descheduled (i.e.
-	     * when the QH is removed from the periodic schedule).
-	     */
-	    break;
-	}
+	local_irq_save(flags);
+	_hcd->available_host_channels++;
+	local_irq_restore(flags);
 	/* Try to queue more transfers now that there's a free channel, */
 	/* unless erratum_usb09_patched is set */
 	if (!erratum_usb09_patched) {

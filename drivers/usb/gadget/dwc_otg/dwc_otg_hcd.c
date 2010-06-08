@@ -433,6 +433,8 @@ static struct tasklet_struct plbdma_tasklet =
  * USB bus with the core and calls the hc_driver->start() function. It returns
  * a negative error on failure.
  */
+int init_hcd_usecs(dwc_otg_hcd_t *_hcd);
+
 int  __init  dwc_otg_hcd_init(struct device *_dev, dwc_otg_device_t * dwc_otg_device)
 {
 	struct usb_hcd *hcd = NULL;
@@ -521,6 +523,9 @@ int  __init  dwc_otg_hcd_init(struct device *_dev, dwc_otg_device_t * dwc_otg_de
 		_dev->dma_mask = (void *)0;
 		_dev->coherent_dma_mask = 0;
 	}
+
+	init_hcd_usecs(dwc_otg_hcd);
+
 	/*
 	 * Finish generic HCD initialization and start the HCD. This function
 	 * allocates the DMA buffer pool, registers the USB bus, requests the
@@ -597,8 +602,7 @@ static void hcd_reinit(dwc_otg_hcd_t * _hcd)
 	dwc_hc_t * channel;
 	_hcd->flags.d32 = 0;
 	_hcd->non_periodic_qh_ptr = &_hcd->non_periodic_sched_active;
-	_hcd->non_periodic_channels = 0;
-	_hcd->periodic_channels = 0;
+	_hcd->available_host_channels = _hcd->core_if->core_params->host_channels;
 
     /*
      * Put all channels in the free channel list and clean up channel
@@ -2177,6 +2181,20 @@ static void assign_and_init_hc(dwc_otg_hcd_t * _hcd, dwc_otg_qh_t * _qh)
 	hc->qh = _qh;
 }
 
+#define DEBUG_HOST_CHANNELS
+#ifdef DEBUG_HOST_CHANNELS
+static int last_sel_trans_num_per_scheduled = 0;
+module_param(last_sel_trans_num_per_scheduled, int, 0444);
+
+static int last_sel_trans_num_nonper_scheduled = 0;
+module_param(last_sel_trans_num_nonper_scheduled, int, 0444);
+
+static int last_sel_trans_num_avail_hc_at_start = 0;
+module_param(last_sel_trans_num_avail_hc_at_start, int, 0444);
+
+static int last_sel_trans_num_avail_hc_at_end = 0;
+module_param(last_sel_trans_num_avail_hc_at_end, int, 0444);
+#endif /* DEBUG_HOST_CHANNELS */
 
 /**
  * This function selects transactions from the HCD transfer schedule and
@@ -2192,16 +2210,37 @@ dwc_otg_transaction_type_e dwc_otg_hcd_select_transactions(dwc_otg_hcd_t *_hcd)
 	struct list_head *qh_ptr;
 	dwc_otg_qh_t * qh;
 	int num_channels;
+	unsigned long flags;
 	dwc_otg_transaction_type_e ret_val = DWC_OTG_TRANSACTION_NONE;
 
 #ifdef DEBUG_SOF
 	    DWC_DEBUGPL(DBG_HCD, "  Select Transactions\n");
 #endif	/*  */
 
+#ifdef DEBUG_HOST_CHANNELS
+	last_sel_trans_num_per_scheduled = 0;
+	last_sel_trans_num_nonper_scheduled = 0;
+	last_sel_trans_num_avail_hc_at_start = _hcd->available_host_channels;
+#endif /* DEBUG_HOST_CHANNELS */
+
 	/* Process entries in the periodic ready list. */
+	num_channels = _hcd->core_if->core_params->host_channels;
 	qh_ptr = _hcd->periodic_sched_ready.next;
 	while (qh_ptr != &_hcd->periodic_sched_ready
 		&& !list_empty(&_hcd->free_hc_list)) {
+
+		// Make sure we leave one channel for non periodic transactions.
+		local_irq_save(flags);
+		if (_hcd->available_host_channels <= 1) {
+			local_irq_restore(flags);
+			break;
+		}
+		_hcd->available_host_channels--;
+		local_irq_restore(flags);
+#ifdef DEBUG_HOST_CHANNELS
+		last_sel_trans_num_per_scheduled++;
+#endif /* DEBUG_HOST_CHANNELS */
+
 		qh = list_entry(qh_ptr, dwc_otg_qh_t, qh_list_entry);
 		assign_and_init_hc(_hcd, qh);
 		/*
@@ -2209,9 +2248,12 @@ dwc_otg_transaction_type_e dwc_otg_hcd_select_transactions(dwc_otg_hcd_t *_hcd)
 		 * periodic assigned schedule.
 		 */
 		qh_ptr = qh_ptr->next;
+		local_irq_save(flags);
 		list_move(&qh->qh_list_entry, &_hcd->periodic_sched_assigned);
+		local_irq_restore(flags);
 		ret_val = DWC_OTG_TRANSACTION_PERIODIC;
 	}
+
 	/*
 	 * Process entries in the deferred portion of the non-periodic list.
 	 * A NAK put them here and, at the right time, they need to be
@@ -2221,7 +2263,6 @@ dwc_otg_transaction_type_e dwc_otg_hcd_select_transactions(dwc_otg_hcd_t *_hcd)
 	while (qh_ptr != &_hcd->non_periodic_sched_deferred) {
 		uint16_t frame_number =
 			dwc_otg_hcd_get_frame_number(dwc_otg_hcd_to_hcd(_hcd));
-		unsigned long flags;
 		qh = list_entry(qh_ptr, dwc_otg_qh_t, qh_list_entry);
 		qh_ptr = qh_ptr->next;
 
@@ -2245,10 +2286,20 @@ dwc_otg_transaction_type_e dwc_otg_hcd_select_transactions(dwc_otg_hcd_t *_hcd)
 	 */
 	qh_ptr = _hcd->non_periodic_sched_inactive.next;
 	num_channels = _hcd->core_if->core_params->host_channels;
-	while (qh_ptr != &_hcd->non_periodic_sched_inactive &&
-		(_hcd->non_periodic_channels <
-		 num_channels - _hcd->periodic_channels)
+	while (qh_ptr != &_hcd->non_periodic_sched_inactive
 		&& !list_empty(&_hcd->free_hc_list)) {
+
+		local_irq_save(flags);
+		if (_hcd->available_host_channels < 1) {
+			local_irq_restore(flags);
+			break;
+		}
+		_hcd->available_host_channels--;
+		local_irq_restore(flags);
+#ifdef DEBUG_HOST_CHANNELS
+		last_sel_trans_num_nonper_scheduled++;
+#endif /* DEBUG_HOST_CHANNELS */
+
 		qh = list_entry(qh_ptr, dwc_otg_qh_t, qh_list_entry);
 		assign_and_init_hc(_hcd, qh);
 
@@ -2257,15 +2308,20 @@ dwc_otg_transaction_type_e dwc_otg_hcd_select_transactions(dwc_otg_hcd_t *_hcd)
 		 * non-periodic active schedule.
 		 */
 		qh_ptr = qh_ptr->next;
+		local_irq_save(flags);
 		list_move(&qh->qh_list_entry,
 			   &_hcd->non_periodic_sched_active);
+	        local_irq_restore(flags);
 		if (ret_val == DWC_OTG_TRANSACTION_NONE) {
 			ret_val = DWC_OTG_TRANSACTION_NON_PERIODIC;
 		} else {
 			ret_val = DWC_OTG_TRANSACTION_ALL;
 		}
-		_hcd->non_periodic_channels++;
 	}
+#ifdef DEBUG_HOST_CHANNELS
+	last_sel_trans_num_avail_hc_at_end = _hcd->available_host_channels;
+#endif /* DEBUG_HOST_CHANNELS */
+
 	return ret_val;
 }
 
@@ -2849,9 +2905,7 @@ void dwc_otg_hcd_dump_frrem(dwc_otg_hcd_t * _hcd)
 					   urb->actual_length);
 			}
 		}
-	} DWC_PRINT("  non_periodic_channels: %d\n",
-		      _hcd->non_periodic_channels);
-	DWC_PRINT("  periodic_channels: %d\n", _hcd->periodic_channels);
+	}
 	DWC_PRINT("  periodic_usecs: %d\n", _hcd->periodic_usecs);
 	np_tx_status.d32 =
 	    dwc_read_reg32(&_hcd->core_if->core_global_regs->gnptxsts);

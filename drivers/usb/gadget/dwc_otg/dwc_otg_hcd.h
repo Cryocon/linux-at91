@@ -205,6 +205,9 @@ typedef struct dwc_otg_qh {
 
 	/** @} */
 
+	uint16_t speed;
+	uint16_t frame_usecs[8];
+
 	/** Entry for QH in either the periodic or non-periodic schedule. */
 	struct list_head        qh_list_entry;
 } dwc_otg_qh_t;
@@ -315,6 +318,18 @@ typedef struct dwc_otg_hcd {
 	uint16_t		periodic_usecs;
 
 	/**
+	 * Total bandwidth claimed so far for all periodic transfers
+	 * in a frame.
+	 * This will include a mixture of HS and FS transfers.
+	 * Units are microseconds per (micro)frame.
+	 * We have a budget per frame and have to schedule
+	 * transactions accordingly.
+	 * Watch out for the fact that things are actually scheduled for the
+	 * "next frame".
+	 */
+	uint16_t		frame_usecs[8];
+
+	/**
 	 * Frame number read from the core at SOF. The value ranges from 0 to
 	 * DWC_HFNUM_MAX_FRNUM.
 	 */
@@ -327,17 +342,9 @@ typedef struct dwc_otg_hcd {
 	struct list_head 	free_hc_list;
 
 	/**
-	 * Number of host channels assigned to periodic transfers. Currently
-	 * assuming that there is a dedicated host channel for each periodic
-	 * transaction and at least one host channel available for
-	 * non-periodic transactions.
+	 * Number of available host channels.
 	 */
-	int			periodic_channels;
-
-	/**
-	 * Number of host channels assigned to non-periodic transfers.
-	 */
-	int			non_periodic_channels;
+	int			available_host_channels;
 
 	/**
 	 * Array of pointers to the host channel descriptors. Allows accessing
