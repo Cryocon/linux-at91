@@ -1136,7 +1136,6 @@ static int32_t handle_hc_nak_intr(dwc_otg_hcd_t * _hcd,
 		break;
 	}
 	handle_nak_done:disable_hc_int(_hc_regs, nak);
-	clear_hc_int(_hc_regs, nak);
 	return 1;
 }
 
@@ -1207,6 +1206,8 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
 		     * automatically executes the PING, then the transfer.
 		     */
 		    halt_channel(_hcd, _hc, _qtd, DWC_OTG_HC_XFER_ACK, must_free);
+		} else {
+		    halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 		}
 	}
 
@@ -1215,7 +1216,6 @@ static int32_t handle_hc_ack_intr(dwc_otg_hcd_t * _hcd,
      * continue transferring data after clearing the error count.
      */
     disable_hc_int(_hc_regs, ack);
-	clear_hc_int(_hc_regs, ack);
 	return 1;
 }
 
@@ -1593,6 +1593,8 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 		handle_hc_frmovrun_intr(_hcd, _hc, _hc_regs, _qtd, must_free);
 	} else if (hcint.b.datatglerr) {
 		handle_hc_datatglerr_intr(_hcd, _hc, _hc_regs, _qtd, must_free);
+		_hc->qh->data_toggle = 0;
+		halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 	} else if (hcint.b.nak && !hcintmsk.b.nak) {
 		/*
 	     * If nak is not masked, it's because a non-split IN transfer
@@ -1633,6 +1635,7 @@ static void handle_hc_chhltd_intr_dma(dwc_otg_hcd_t * _hcd,
 			     __func__, _hc->hc_num, hcint.b.nyet, hcint.d32,
 				 dwc_read_reg32(&_hcd->core_if->core_global_regs->gintsts));
 #endif
+			halt_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 		}
 	}
 }
@@ -1663,7 +1666,6 @@ static int32_t handle_hc_chhltd_intr(dwc_otg_hcd_t * _hcd,
 #endif	/*  */
 	    release_channel(_hcd, _hc, _qtd, _hc->halt_status, must_free);
 	}
-	clear_hc_int(_hc_regs, chhltd);
 	return 1;
 }
 
