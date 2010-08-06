@@ -191,21 +191,10 @@ config SATA_DWC
 	tristate "DesignWare Cores SATA support"
 	depends on 460EX
 	help
-	  This option enables support for the Synopsys DesignWare Cores SATA
-	  controller.
-	  It can be found on the AMCC 460EX.
+	  This option enables support for the on-chip SATA controller of the
+	  AppliedMicro processor 460EX.
 
 	  If unsure, say N.
-
-config SATA_DWC_DEBUG
-	bool "Enable debug output"
-	depends on SATA_DWC
-	default n
-
-config SATA_DWC_VDEBUG
-	bool "Enable verbose debug output"
-	depends on SATA_DWC && SATA_DWC_DEBUG
-	default n
 
 config SATA_MV
 	tristate "Marvell SATA support"
@@ -812,6 +801,15 @@ config PATA_RZ1000
 	depends on PCI
 	help
 	  This option enables basic support for the PC Tech RZ1000/1
+	  PATA controllers via the new ATA layer
+
+	  If unsure, say N.
+
+config PATA_SAMSUNG_CF
+	tristate "Samsung SoC PATA support"
+	depends on SAMSUNG_DEV_IDE
+	help
+	  This option enables basic support for Samsung's S3C/S5P board
 	  PATA controllers via the new ATA layer
 
 	  If unsure, say N.
