@@ -32,7 +32,6 @@
 #include <linux/start_kernel.h>
 #include <linux/security.h>
 #include <linux/smp.h>
-#include <linux/workqueue.h>
 #include <linux/profile.h>
 #include <linux/rcupdate.h>
 #include <linux/moduleparam.h>
@@ -203,11 +202,11 @@ static char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
 static const char *panic_later, *panic_param;
 
-extern struct obs_kernel_param __setup_start[], __setup_end[];
+extern const struct obs_kernel_param __setup_start[], __setup_end[];
 
 static int __init obsolete_checksetup(char *line)
 {
-	struct obs_kernel_param *p;
+	const struct obs_kernel_param *p;
 	int had_early_param = 0;
 
 	p = __setup_start;
@@ -443,7 +442,6 @@ static noinline void __init_refok rest_init(void)
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
 	rcu_read_unlock();
 	complete(&kthreadd_done);
-	unlock_kernel();
 
 	/*
 	 * The boot idle thread must execute schedule()
@@ -461,7 +459,7 @@ static noinline void __init_refok rest_init(void)
 /* Check for early params. */
 static int __init do_early_param(char *param, char *val)
 {
-	struct obs_kernel_param *p;
+	const struct obs_kernel_param *p;
 
 	for (p = __setup_start; p < __setup_end; p++) {
 		if ((p->early && strcmp(param, p->str) == 0) ||
@@ -539,7 +537,7 @@ static void __init mm_init(void)
 asmlinkage void __init start_kernel(void)
 {
 	char * command_line;
-	extern struct kernel_param __start___param[], __stop___param[];
+	extern const struct kernel_param __start___param[], __stop___param[];
 
 	smp_setup_processor_id();
 
@@ -568,7 +566,6 @@ asmlinkage void __init start_kernel(void)
 #ifdef CONFIG_LOGBUFFER
 	setup_ext_logbuff();
 #endif
-	lock_kernel();
 	tick_init();
 	boot_cpu_init();
 	page_address_init();
@@ -728,27 +725,33 @@ core_param(initcall_debug, initcall_debug, bool, 0644);
 
 static char msgbuf[64];
 
-int do_one_initcall(initcall_t fn)
+static int __init_or_module do_one_initcall_debug(initcall_t fn)
 {
-	int count = preempt_count();
 	ktime_t calltime, delta, rettime;
 	unsigned long long duration;
 	int ret;
 
-	if (initcall_debug) {
-		printk("calling  %pF @ %i\n", fn, task_pid_nr(current));
-		calltime = ktime_get();
-	}
-
+	printk(KERN_DEBUG "calling  %pF @ %i\n", fn, task_pid_nr(current));
+	calltime = ktime_get();
 	ret = fn();
+	rettime = ktime_get();
+	delta = ktime_sub(rettime, calltime);
+	duration = (unsigned long long) ktime_to_ns(delta) >> 10;
+	printk(KERN_DEBUG "initcall %pF returned %d after %lld usecs\n", fn,
+		ret, duration);
 
-	if (initcall_debug) {
-		rettime = ktime_get();
-		delta = ktime_sub(rettime, calltime);
-		duration = (unsigned long long) ktime_to_ns(delta) >> 10;
-		printk("initcall %pF returned %d after %lld usecs\n", fn,
-			ret, duration);
-	}
+	return ret;
+}
+
+int __init_or_module do_one_initcall(initcall_t fn)
+{
+	int count = preempt_count();
+	int ret;
+
+	if (initcall_debug)
+		ret = do_one_initcall_debug(fn);
+	else
+		ret = fn();
 
 	msgbuf[0] = 0;
 
@@ -793,7 +796,6 @@ static void __init do_initcalls(void)
  */
 static void __init do_basic_setup(void)
 {
-	init_workqueues();
 	cpuset_init_smp();
 	usermodehelper_init();
 	init_tmpfs();
@@ -826,7 +828,6 @@ static noinline int init_post(void)
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	free_initmem();
-	unlock_kernel();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
@@ -866,8 +867,6 @@ static int __init kernel_init(void * unused)
 	 * Wait until kthreadd is all set-up.
 	 */
 	wait_for_completion(&kthreadd_done);
-	lock_kernel();
-
 	/*
 	 * init can allocate pages on any node
 	 */

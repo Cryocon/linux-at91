@@ -34,7 +34,7 @@
 #include <asm/io.h>
 
 struct ndfc_controller {
-	struct of_device *ofdev;
+	struct platform_device *ofdev;
 	void __iomem *ndfcbase;
 	struct mtd_info mtd;
 	struct nand_chip chip;
@@ -224,7 +224,7 @@ err:
 	return ret;
 }
 
-static int __devinit ndfc_probe(struct of_device *ofdev,
+static int __devinit ndfc_probe(struct platform_device *ofdev,
 				const struct of_device_id *match)
 {
 	struct ndfc_controller *ndfc = &ndfc_ctrl;
@@ -276,7 +276,7 @@ static int __devinit ndfc_probe(struct of_device *ofdev,
 	return 0;
 }
 
-static int __devexit ndfc_remove(struct of_device *ofdev)
+static int __devexit ndfc_remove(struct platform_device *ofdev)
 {
 	struct ndfc_controller *ndfc = dev_get_drvdata(&ofdev->dev);
 
