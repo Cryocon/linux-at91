@@ -65,8 +65,9 @@ NESTED(handle_sysn32, PT_SIZE, sp)
 	sd	t0, PT_R7(sp)		# set error flag
 	beqz	t0, 1f
 
+	ld	t1, PT_R2(sp)		# syscall number
 	dnegu	v0			# error
-	sd	v0, PT_R0(sp)		# set flag for syscall restarting
+	sd	t1, PT_R0(sp)		# save it for syscall restarting
 1:	sd	v0, PT_R2(sp)		# result
 
 	local_irq_disable		# make sure need_resched and
@@ -106,8 +107,9 @@ n32_syscall_trace_entry:
 	sd	t0, PT_R7(sp)		# set error flag
 	beqz	t0, 1f
 
+	ld	t1, PT_R2(sp)		# syscall number
 	dnegu	v0			# error
-	sd	v0, PT_R0(sp)		# set flag for syscall restarting
+	sd	t1, PT_R0(sp)		# save it for syscall restarting
 1:	sd	v0, PT_R2(sp)		# result
 
 	j	syscall_exit
@@ -419,5 +421,8 @@ EXPORT(sysn32_call_table)
 	PTR	sys_perf_event_open
 	PTR	sys_accept4
 	PTR     compat_sys_recvmmsg
-	PTR     sys_getdents
+	PTR     sys_getdents64
+	PTR	sys_fanotify_init		/* 6300 */
+	PTR	sys_fanotify_mark
+	PTR	sys_prlimit64
 	.size	sysn32_call_table,.-sysn32_call_table
