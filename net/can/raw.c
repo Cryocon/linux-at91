@@ -90,24 +90,39 @@ struct raw_sock {
 	can_err_mask_t err_mask;
 };
 
+/*
+ * Return pointer to store the extra msg flags for raw_recvmsg().
+ * We use the space of one unsigned int beyond the 'struct sockaddr_can'
+ * in skb->cb.
+ */
+static inline unsigned int *raw_flags(struct sk_buff *skb)
+{
+	BUILD_BUG_ON(sizeof(skb->cb) <= (sizeof(struct sockaddr_can) +
+					 sizeof(unsigned int)));
+
+	/* return pointer after struct sockaddr_can */
+	return (unsigned int *)(&((struct sockaddr_can *)skb->cb)[1]);
+}
+
 static inline struct raw_sock *raw_sk(const struct sock *sk)
 {
 	return (struct raw_sock *)sk;
 }
 
-static void raw_rcv(struct sk_buff *skb, void *data)
+static void raw_rcv(struct sk_buff *oskb, void *data)
 {
 	struct sock *sk = (struct sock *)data;
 	struct raw_sock *ro = raw_sk(sk);
 	struct sockaddr_can *addr;
-	int error;
+	struct sk_buff *skb;
+	unsigned int *pflags;
 
 	/* check the received tx sock reference */
-	if (!ro->recv_own_msgs && skb->sk == sk)
+	if (!ro->recv_own_msgs && oskb->sk == sk)
 		return;
 
 	/* clone the given skb to be able to enqueue it into the rcv queue */
-	skb = skb_clone(skb, GFP_ATOMIC);
+	skb = skb_clone(oskb, GFP_ATOMIC);
 	if (!skb)
 		return;
 
@@ -124,14 +139,20 @@ static void raw_rcv(struct sk_buff *skb, void *data)
 	addr->can_family  = AF_CAN;
 	addr->can_ifindex = skb->dev->ifindex;
 
-	error = sock_queue_rcv_skb(sk, skb);
-	if (error < 0)
+	/* add CAN specific message flags for raw_recvmsg() */
+	pflags = raw_flags(skb);
+	*pflags = 0;
+	if (oskb->sk)
+		*pflags |= MSG_DONTROUTE;
+	if (oskb->sk == sk)
+		*pflags |= MSG_CONFIRM;
+
+	if (sock_queue_rcv_skb(sk, skb) < 0)
 		kfree_skb(skb);
 }
 
 static int raw_enable_filters(struct net_device *dev, struct sock *sk,
-			      struct can_filter *filter,
-			      int count)
+			      struct can_filter *filter, int count)
 {
 	int err = 0;
 	int i;
@@ -166,8 +187,7 @@ static int raw_enable_errfilter(struct net_device *dev, struct sock *sk,
 }
 
 static void raw_disable_filters(struct net_device *dev, struct sock *sk,
-			      struct can_filter *filter,
-			      int count)
+			      struct can_filter *filter, int count)
 {
 	int i;
 
@@ -359,7 +379,6 @@ static int raw_bind(struct socket *sock, struct sockaddr *uaddr, int len)
 		/* filters set by default/setsockopt */
 		err = raw_enable_allfilters(dev, sk);
 		dev_put(dev);
-
 	} else {
 		ifindex = 0;
 
@@ -464,7 +483,6 @@ static int raw_setsockopt(struct socket *sock, int level, int optname,
 			if (err) {
 				if (count > 1)
 					kfree(filter);
-
 				goto out_fil;
 			}
 
@@ -653,12 +671,12 @@ static int raw_sendmsg(struct kiocb *iocb, struct socket *sock,
 	err = memcpy_fromiovec(skb_put(skb, size), msg->msg_iov, size);
 	if (err < 0)
 		goto free_skb;
-	err = sock_tx_timestamp(msg, sk, skb_tx(skb));
+	err = sock_tx_timestamp(sk, &skb_shinfo(skb)->tx_flags);
 	if (err < 0)
 		goto free_skb;
 
 	/* to be able to check the received tx sock reference in raw_rcv() */
-	skb_tx(skb)->prevent_sk_orphan = 1;
+	skb_shinfo(skb)->tx_flags |= SKBTX_DRV_NEEDS_SK_REF;
 
 	skb->dev = dev;
 	skb->sk  = sk;
@@ -685,25 +703,25 @@ static int raw_recvmsg(struct kiocb *iocb, struct socket *sock,
 {
 	struct sock *sk = sock->sk;
 	struct sk_buff *skb;
-	int error = 0;
+	int err = 0;
 	int noblock;
 
 	noblock =  flags & MSG_DONTWAIT;
 	flags   &= ~MSG_DONTWAIT;
 
-	skb = skb_recv_datagram(sk, flags, noblock, &error);
+	skb = skb_recv_datagram(sk, flags, noblock, &err);
 	if (!skb)
-		return error;
+		return err;
 
 	if (size < skb->len)
 		msg->msg_flags |= MSG_TRUNC;
 	else
 		size = skb->len;
 
-	error = memcpy_toiovec(msg->msg_iov, skb->data, size);
-	if (error < 0) {
+	err = memcpy_toiovec(msg->msg_iov, skb->data, size);
+	if (err < 0) {
 		skb_free_datagram(sk, skb);
-		return error;
+		return err;
 	}
 
 	sock_recv_ts_and_drops(msg, sk, skb);
@@ -712,6 +730,9 @@ static int raw_recvmsg(struct kiocb *iocb, struct socket *sock,
 		msg->msg_namelen = sizeof(struct sockaddr_can);
 		memcpy(msg->msg_name, skb->cb, msg->msg_namelen);
 	}
+
+	/* assign the flags that have been recorded in raw_rcv() */
+	msg->msg_flags |= *(raw_flags(skb));
 
 	skb_free_datagram(sk, skb);
 
