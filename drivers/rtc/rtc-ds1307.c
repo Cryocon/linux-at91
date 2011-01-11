@@ -109,9 +109,9 @@ struct ds1307 {
 	struct i2c_client	*client;
 	struct rtc_device	*rtc;
 	struct work_struct	work;
-	s32 (*read_block_data)(struct i2c_client *client, u8 command,
+	s32 (*read_block_data)(const struct i2c_client *client, u8 command,
 			       u8 length, u8 *values);
-	s32 (*write_block_data)(struct i2c_client *client, u8 command,
+	s32 (*write_block_data)(const struct i2c_client *client, u8 command,
 				u8 length, const u8 *values);
 };
 
@@ -161,8 +161,8 @@ MODULE_DEVICE_TABLE(i2c, ds1307_id);
 
 #define BLOCK_DATA_MAX_TRIES 10
 
-static s32 ds1307_read_block_data_once(struct i2c_client *client, u8 command,
-				  u8 length, u8 *values)
+static s32 ds1307_read_block_data_once(const struct i2c_client *client,
+				       u8 command, u8 length, u8 *values)
 {
 	s32 i, data;
 
@@ -175,7 +175,7 @@ static s32 ds1307_read_block_data_once(struct i2c_client *client, u8 command,
 	return i;
 }
 
-static s32 ds1307_read_block_data(struct i2c_client *client, u8 command,
+static s32 ds1307_read_block_data(const struct i2c_client *client, u8 command,
 				  u8 length, u8 *values)
 {
 	u8 oldvalues[I2C_SMBUS_BLOCK_MAX];
@@ -201,7 +201,7 @@ static s32 ds1307_read_block_data(struct i2c_client *client, u8 command,
 	return length;
 }
 
-static s32 ds1307_write_block_data(struct i2c_client *client, u8 command,
+static s32 ds1307_write_block_data(const struct i2c_client *client, u8 command,
 				   u8 length, const u8 *values)
 {
 	u8 currvalues[I2C_SMBUS_BLOCK_MAX];

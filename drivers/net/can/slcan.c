@@ -1,28 +1,26 @@
 /*
  * slcan.c - serial line CAN interface driver (using tty line discipline)
  *
- * Copyright (c) 2007 Volkswagen Group Electronic Research
- * All rights reserved.
+ * This file is derived from linux/drivers/net/slip.c
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of Volkswagen nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ * slip.c Authors  : Laurence Culhane <loz@holmes.demon.co.uk>
+ *                   Fred N. van Kempen <waltje@uwalt.nl.mugnet.org>
+ * slcan.c Author  : Oliver Hartkopp <socketcan@hartkopp.net>
  *
- * Alternatively, provided that this notice is retained in full, this
- * software may be distributed under the terms of the GNU General
- * Public License ("GPL") version 2, in which case the provisions of the
- * GPL apply INSTEAD OF those given above.
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
  *
- * The provided data structures and external interfaces from this code
- * are not restricted to be used by modules with a GPL compatible license.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307. You can also get it
+ * at http://www.gnu.org/licenses/gpl.html
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -41,40 +39,23 @@
  *
  */
 
-/*
- * This file is derived from linux/drivers/net/slip.c
- *
- * Therefore it has the same (strange?) behaviour not to unregister the
- * netdevice when detaching the tty. Is there any better solution?
- *
- * Do not try to attach, detach and re-attach a tty for this reason ...
- *
- * slip.c Authors: Laurence Culhane, <loz@holmes.demon.co.uk>
- *                 Fred N. van Kempen, <waltje@uwalt.nl.mugnet.org>
- */
-
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 
 #include <asm/system.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/bitops.h>
 #include <linux/string.h>
-#include <linux/mm.h>
-#include <linux/interrupt.h>
-#include <linux/in.h>
 #include <linux/tty.h>
 #include <linux/errno.h>
 #include <linux/netdevice.h>
-#include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <linux/rtnetlink.h>
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
-#include <linux/if_slip.h>
+#include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/init.h>
-
 #include <linux/can.h>
 
 static __initdata const char banner[] =
@@ -82,36 +63,9 @@ static __initdata const char banner[] =
 
 MODULE_ALIAS_LDISC(N_SLCAN);
 MODULE_DESCRIPTION("serial line CAN interface");
-MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Oliver Hartkopp <oliver.hartkopp@volkswagen.de>");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Oliver Hartkopp <socketcan@hartkopp.net>");
 
-#ifdef CONFIG_CAN_DEBUG_DEVICES
-static int debug = 0;
-module_param(debug, int, S_IRUGO);
-#define DBG(args...)       (debug & 1 ? \
-			       (printk(KERN_DEBUG "slcan %s: ", __func__), \
-				printk(args)) : 0)
-#else
-#define DBG(args...)
-#endif
-
-#ifndef N_SLCAN
-#error Your kernel does not support tty line discipline N_SLCAN
-#endif
-/*
- * As there is currently no line discipline N_SLCAN in the mainstream kernel
- * you will have to modify two kernel includes & recompile the kernel.
- *
- * Add this in include/asm/termios.h after the definition of N_HCI:
- *        #define N_SLCAN         16 
- *
- * Increment NR_LDICS in include/linux/tty.h from 16 to 17
- *
- * NEW: Since Kernel 2.6.21 you only have to change include/linux/tty.h
- *
- */
-
-#define SLC_CHECK_TRANSMIT
 #define SLCAN_MAGIC 0x53CA
 
 static int maxdev = 10;		/* MAX number of SLCAN channels;
@@ -150,7 +104,7 @@ struct slcan {
 static struct net_device **slcan_devs;
 
  /************************************************************************
-  *			SLCAN ENCAPSULATION FORMAT		  	 *
+  *			SLCAN ENCAPSULATION FORMAT			 *
   ************************************************************************/
 
 /*
@@ -174,7 +128,7 @@ static struct net_device **slcan_devs;
  * The <id> is 3 (standard) or 8 (extended) bytes in ASCII Hex (base64).
  * The <dlc> is a one byte ASCII number ('0' - '8')
  * The <data> section has at much ASCII Hex bytes as defined by the <dlc>
- * 
+ *
  * Examples:
  *
  * t1230 : can_id 0x123, can_dlc 0, no data
@@ -185,10 +139,11 @@ static struct net_device **slcan_devs;
  */
 
  /************************************************************************
-  *			STANDARD SLCAN DECAPSULATION		  	 *
+  *			STANDARD SLCAN DECAPSULATION			 *
   ************************************************************************/
 
-static int asc2nibble(char c) {
+static int asc2nibble(char c)
+{
 
 	if ((c >= '0') && (c <= '9'))
 		return c - '0';
@@ -205,10 +160,10 @@ static int asc2nibble(char c) {
 /* Send one completely decapsulated can_frame to the network layer */
 static void slc_bump(struct slcan *sl)
 {
-	struct net_device_stats *stats = sl->dev->get_stats(sl->dev);
 	struct sk_buff *skb;
 	struct can_frame cf;
 	int i, dlc_pos, tmp;
+	unsigned long ultmp;
 	char cmd = sl->rbuff[0];
 
 	if ((cmd != 't') && (cmd != 'T') && (cmd != 'r') && (cmd != 'R'))
@@ -222,11 +177,15 @@ static void slc_bump(struct slcan *sl)
 	if (!((sl->rbuff[dlc_pos] >= '0') && (sl->rbuff[dlc_pos] < '9')))
 		return;
 
-	cf.can_dlc = sl->rbuff[dlc_pos] & 0x0F; /* get can_dlc */
+	cf.can_dlc = sl->rbuff[dlc_pos] - '0'; /* get can_dlc from ASCII val */
 
 	sl->rbuff[dlc_pos] = 0; /* terminate can_id string */
-	cf.can_id = simple_strtoul(sl->rbuff+1, NULL, 16);
-	
+
+	if (strict_strtoul(sl->rbuff+1, 16, &ultmp))
+		return;
+
+	cf.can_id = ultmp;
+
 	if (!(cmd & 0x20)) /* NO tiny chars => extended frame format */
 		cf.can_id |= CAN_EFF_FLAG;
 
@@ -235,12 +194,14 @@ static void slc_bump(struct slcan *sl)
 
 	*(u64 *) (&cf.data) = 0; /* clear payload */
 
-	for (i = 0, dlc_pos++; i < cf.can_dlc; i++){
-		
-		if ((tmp = asc2nibble(sl->rbuff[dlc_pos++])) > 0x0F)
+	for (i = 0, dlc_pos++; i < cf.can_dlc; i++) {
+
+		tmp = asc2nibble(sl->rbuff[dlc_pos++]);
+		if (tmp > 0x0F)
 			return;
 		cf.data[i] = (tmp << 4);
-		if ((tmp = asc2nibble(sl->rbuff[dlc_pos++])) > 0x0F)
+		tmp = asc2nibble(sl->rbuff[dlc_pos++]);
+		if (tmp > 0x0F)
 			return;
 		cf.data[i] |= tmp;
 	}
@@ -258,15 +219,13 @@ static void slc_bump(struct slcan *sl)
 	       &cf, sizeof(struct can_frame));
 	netif_rx(skb);
 
-	sl->dev->last_rx = jiffies;
-	stats->rx_packets++;
-	stats->rx_bytes += cf.can_dlc;
+	sl->dev->stats.rx_packets++;
+	sl->dev->stats.rx_bytes += cf.can_dlc;
 }
 
 /* parse tty input stream */
 static void slcan_unesc(struct slcan *sl, unsigned char s)
 {
-	struct net_device_stats *stats = sl->dev->get_stats(sl->dev);
 
 	if ((s == '\r') || (s == '\a')) { /* CR or BEL ends the pdu */
 		if (!test_and_clear_bit(SLF_ERROR, &sl->flags) &&
@@ -280,7 +239,7 @@ static void slcan_unesc(struct slcan *sl, unsigned char s)
 				sl->rbuff[sl->rcount++] = s;
 				return;
 			} else {
-				stats->rx_over_errors++;
+				sl->dev->stats.rx_over_errors++;
 				set_bit(SLF_ERROR, &sl->flags);
 			}
 		}
@@ -288,13 +247,12 @@ static void slcan_unesc(struct slcan *sl, unsigned char s)
 }
 
  /************************************************************************
-  *			STANDARD SLCAN ENCAPSULATION		  	 *
+  *			STANDARD SLCAN ENCAPSULATION			 *
   ************************************************************************/
 
 /* Encapsulate one can_frame and stuff into a TTY queue. */
 static void slc_encaps(struct slcan *sl, struct can_frame *cf)
 {
-	struct net_device_stats *stats = sl->dev->get_stats(sl->dev);
 	int actual, idx, i;
 	char cmd;
 
@@ -315,26 +273,21 @@ static void slc_encaps(struct slcan *sl, struct can_frame *cf)
 	for (i = 0; i < cf->can_dlc; i++)
 		sprintf(&sl->xbuff[idx + 2*i], "%02X", cf->data[i]);
 
-	DBG("ASCII frame = '%s'\n", sl->xbuff);
-
 	strcat(sl->xbuff, "\r"); /* add terminating character */
 
 	/* Order of next two lines is *very* important.
 	 * When we are sending a little amount of data,
-	 * the transfer may be completed inside driver.write()
+	 * the transfer may be completed inside the ops->write()
 	 * routine, because it's running with interrupts enabled.
 	 * In this case we *never* got WRITE_WAKEUP event,
 	 * if we did not request it before write operation.
 	 *       14 Oct 1994  Dmitry Gorodchanin.
 	 */
-	sl->tty->flags |= (1 << TTY_DO_WRITE_WAKEUP);
-	actual = sl->tty->driver->write(sl->tty, sl->xbuff, strlen(sl->xbuff));
-#ifdef SLC_CHECK_TRANSMIT
-	sl->dev->trans_start = jiffies;
-#endif
+	set_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
+	actual = sl->tty->ops->write(sl->tty, sl->xbuff, strlen(sl->xbuff));
 	sl->xleft = strlen(sl->xbuff) - actual;
 	sl->xhead = sl->xbuff + actual;
-	stats->tx_bytes += cf->can_dlc;
+	sl->dev->stats.tx_bytes += cf->can_dlc;
 }
 
 /*
@@ -345,63 +298,27 @@ static void slcan_write_wakeup(struct tty_struct *tty)
 {
 	int actual;
 	struct slcan *sl = (struct slcan *) tty->disc_data;
-	struct net_device_stats *stats = sl->dev->get_stats(sl->dev);
 
 	/* First make sure we're connected. */
-	if (!sl || sl->magic != SLCAN_MAGIC || !netif_running(sl->dev)) {
+	if (!sl || sl->magic != SLCAN_MAGIC || !netif_running(sl->dev))
 		return;
-	}
+
 	if (sl->xleft <= 0)  {
 		/* Now serial buffer is almost free & we can start
 		 * transmission of another packet */
-		stats->tx_packets++;
-		tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
+		sl->dev->stats.tx_packets++;
+		clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
 		netif_wake_queue(sl->dev);
 		return;
 	}
 
-	actual = tty->driver->write(tty, sl->xhead, sl->xleft);
+	actual = tty->ops->write(tty, sl->xhead, sl->xleft);
 	sl->xleft -= actual;
 	sl->xhead += actual;
 }
 
-static void slc_tx_timeout(struct net_device *dev)
-{
-	struct slcan *sl = netdev_priv(dev);
-
-	spin_lock(&sl->lock);
-
-	if (netif_queue_stopped(dev)) {
-		if (!netif_running(dev))
-			goto out;
-
-		/* May be we must check transmitter timeout here ?
-		 *      14 Oct 1994 Dmitry Gorodchanin.
-		 */
-#ifdef SLC_CHECK_TRANSMIT
-		if (time_before(jiffies, dev->trans_start + 20 * HZ))  {
-			/* 20 sec timeout not reached */
-			goto out;
-		}
-		printk(KERN_WARNING "%s: transmit timed out, %s?\n", dev->name,
-		       (sl->tty->driver->chars_in_buffer(sl->tty) || sl->xleft)
-		       ? "bad line quality" : "driver error");
-		sl->xleft = 0;
-		sl->tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
-		netif_wake_queue(sl->dev);
-#endif
-	}
-out:
-	spin_unlock(&sl->lock);
-}
-
-
-/******************************************
- *   Routines looking at netdevice side.
- ******************************************/
-
 /* Send a can_frame to a TTY queue. */
-static int slc_xmit(struct sk_buff *skb, struct net_device *dev)
+static netdev_tx_t slc_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct slcan *sl = netdev_priv(dev);
 
@@ -414,7 +331,6 @@ static int slc_xmit(struct sk_buff *skb, struct net_device *dev)
 		printk(KERN_WARNING "%s: xmit: iface is down\n", dev->name);
 		goto out;
 	}
-
 	if (sl->tty == NULL) {
 		spin_unlock(&sl->lock);
 		goto out;
@@ -426,9 +342,13 @@ static int slc_xmit(struct sk_buff *skb, struct net_device *dev)
 
 out:
 	kfree_skb(skb);
-	return 0;
+	return NETDEV_TX_OK;
 }
 
+
+/******************************************
+ *   Routines looking at netdevice side.
+ ******************************************/
 
 /* Netdevice UP -> DOWN routine */
 static int slc_close(struct net_device *dev)
@@ -438,7 +358,7 @@ static int slc_close(struct net_device *dev)
 	spin_lock_bh(&sl->lock);
 	if (sl->tty) {
 		/* TTY discipline is running. */
-		sl->tty->flags &= ~(1 << TTY_DO_WRITE_WAKEUP);
+		clear_bit(TTY_DO_WRITE_WAKEUP, &sl->tty->flags);
 	}
 	netif_stop_queue(dev);
 	sl->rcount   = 0;
@@ -453,7 +373,7 @@ static int slc_open(struct net_device *dev)
 {
 	struct slcan *sl = netdev_priv(dev);
 
-	if (sl->tty==NULL)
+	if (sl->tty == NULL)
 		return -ENODEV;
 
 	sl->flags &= (1 << SLF_INUSE);
@@ -461,13 +381,24 @@ static int slc_open(struct net_device *dev)
 	return 0;
 }
 
-/* Netdevice register callback */
+/* Hook the destructor so we can free slcan devs at the right point in time */
+static void slc_free_netdev(struct net_device *dev)
+{
+	int i = dev->base_addr;
+	free_netdev(dev);
+	slcan_devs[i] = NULL;
+}
+
+static const struct net_device_ops slc_netdev_ops = {
+	.ndo_open               = slc_open,
+	.ndo_stop               = slc_close,
+	.ndo_start_xmit         = slc_xmit,
+};
+
 static void slc_setup(struct net_device *dev)
 {
-	dev->open		= slc_open;
-	dev->destructor		= free_netdev;
-	dev->stop		= slc_close;
-	dev->hard_start_xmit	= slc_xmit;
+	dev->netdev_ops		= &slc_netdev_ops;
+	dev->destructor		= slc_free_netdev;
 
 	dev->hard_header_len	= 0;
 	dev->addr_len		= 0;
@@ -475,10 +406,6 @@ static void slc_setup(struct net_device *dev)
 
 	dev->mtu		= sizeof(struct can_frame);
 	dev->type		= ARPHRD_CAN;
-#ifdef SLC_CHECK_TRANSMIT
-	dev->tx_timeout		= slc_tx_timeout;
-	dev->watchdog_timeo	= 20*HZ;
-#endif
 
 	/* New-style flags. */
 	dev->flags		= IFF_NOARP;
@@ -486,7 +413,7 @@ static void slc_setup(struct net_device *dev)
 }
 
 /******************************************
- * Routines looking at TTY side.
+  Routines looking at TTY side.
  ******************************************/
 
 /*
@@ -502,18 +429,15 @@ static void slcan_receive_buf(struct tty_struct *tty,
 			      const unsigned char *cp, char *fp, int count)
 {
 	struct slcan *sl = (struct slcan *) tty->disc_data;
-	struct net_device_stats *stats = sl->dev->get_stats(sl->dev);
 
-	if (!sl || sl->magic != SLCAN_MAGIC ||
-	    !netif_running(sl->dev))
+	if (!sl || sl->magic != SLCAN_MAGIC || !netif_running(sl->dev))
 		return;
 
 	/* Read the characters out of the buffer */
 	while (count--) {
 		if (fp && *fp++) {
-			if (!test_and_set_bit(SLF_ERROR, &sl->flags))  {
-				stats->rx_errors++;
-			}
+			if (!test_and_set_bit(SLF_ERROR, &sl->flags))
+				sl->dev->stats.rx_errors++;
 			cp++;
 			continue;
 		}
@@ -526,7 +450,6 @@ static void slcan_receive_buf(struct tty_struct *tty,
  ************************************/
 
 /* Collect hanged up channels */
-
 static void slc_sync(void)
 {
 	int i;
@@ -534,24 +457,22 @@ static void slc_sync(void)
 	struct slcan	  *sl;
 
 	for (i = 0; i < maxdev; i++) {
-		if ((dev = slcan_devs[i]) == NULL)
+		dev = slcan_devs[i];
+		if (dev == NULL)
 			break;
 
 		sl = netdev_priv(dev);
 		if (sl->tty || sl->leased)
 			continue;
-		if (dev->flags&IFF_UP)
+		if (dev->flags & IFF_UP)
 			dev_close(dev);
 	}
 }
-
 
 /* Find a free SLCAN channel, and link in this `tty' line. */
 static struct slcan *slc_alloc(dev_t line)
 {
 	int i;
-	int sel = -1;
-	int score = -1;
 	struct net_device *dev = NULL;
 	struct slcan       *sl;
 
@@ -563,52 +484,6 @@ static struct slcan *slc_alloc(dev_t line)
 		if (dev == NULL)
 			break;
 
-		sl = netdev_priv(dev);
-		if (sl->leased) {
-			if (sl->line != line)
-				continue;
-			if (sl->tty)
-				return NULL;
-
-			/* Clear ESCAPE & ERROR flags */
-			sl->flags &= (1 << SLF_INUSE);
-			return sl;
-		}
-
-		if (sl->tty)
-			continue;
-
-		if (current->pid == sl->pid) {
-			if (sl->line == line && score < 3) {
-				sel = i;
-				score = 3;
-				continue;
-			}
-			if (score < 2) {
-				sel = i;
-				score = 2;
-			}
-			continue;
-		}
-		if (sl->line == line && score < 1) {
-			sel = i;
-			score = 1;
-			continue;
-		}
-		if (score < 0) {
-			sel = i;
-			score = 0;
-		}
-	}
-
-	if (sel >= 0) {
-		i = sel;
-		dev = slcan_devs[i];
-		if (score > 1) {
-			sl = netdev_priv(dev);
-			sl->flags &= (1 << SLF_INUSE);
-			return sl;
-		}
 	}
 
 	/* Sorry, too many, all slots in use */
@@ -619,7 +494,6 @@ static struct slcan *slc_alloc(dev_t line)
 		sl = netdev_priv(dev);
 		if (test_bit(SLF_INUSE, &sl->flags)) {
 			unregister_netdevice(dev);
-			free_netdev(dev); /* new in slcan.c */
 			dev = NULL;
 			slcan_devs[i] = NULL;
 		}
@@ -627,7 +501,7 @@ static struct slcan *slc_alloc(dev_t line)
 
 	if (!dev) {
 		char name[IFNAMSIZ];
-		sprintf(name, "slc%d", i);
+		sprintf(name, "slcan%d", i);
 
 		dev = alloc_netdev(sizeof(*sl), name, slc_setup);
 		if (!dev)
@@ -638,8 +512,8 @@ static struct slcan *slc_alloc(dev_t line)
 	sl = netdev_priv(dev);
 
 	/* Initialize channel control data */
-	sl->magic       = SLCAN_MAGIC;
-	sl->dev	      	= dev;
+	sl->magic = SLCAN_MAGIC;
+	sl->dev	= dev;
 	spin_lock_init(&sl->lock);
 	slcan_devs[i] = dev;
 
@@ -661,8 +535,11 @@ static int slcan_open(struct tty_struct *tty)
 	struct slcan *sl;
 	int err;
 
-	if(!capable(CAP_NET_ADMIN))
+	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
+
+	if (tty->ops->write == NULL)
+		return -EOPNOTSUPP;
 
 	/* RTnetlink lock is misused here to serialize concurrent
 	   opens of slcan channels. There are better ways, but it is
@@ -673,7 +550,7 @@ static int slcan_open(struct tty_struct *tty)
 	/* Collect hanged up channels. */
 	slc_sync();
 
-	sl = (struct slcan *) tty->disc_data;
+	sl = tty->disc_data;
 
 	err = -EEXIST;
 	/* First make sure we're not already connected. */
@@ -682,7 +559,8 @@ static int slcan_open(struct tty_struct *tty)
 
 	/* OK.  Find a free SLCAN channel to use. */
 	err = -ENFILE;
-	if ((sl = slc_alloc(tty_devnum(tty))) == NULL)
+	sl = slc_alloc(tty_devnum(tty));
+	if (sl == NULL)
 		goto err_exit;
 
 	sl->tty = tty;
@@ -697,15 +575,14 @@ static int slcan_open(struct tty_struct *tty)
 
 		set_bit(SLF_INUSE, &sl->flags);
 
-		if ((err = register_netdevice(sl->dev)))
+		err = register_netdevice(sl->dev);
+		if (err)
 			goto err_free_chan;
 	}
 
 	/* Done.  We have linked the TTY line to a channel. */
 	rtnl_unlock();
-
 	tty->receive_room = 65536;	/* We don't flow control */
-
 	return sl->dev->base_addr;
 
 err_free_chan:
@@ -721,30 +598,13 @@ err_exit:
 }
 
 /*
-
-  FIXME: 1,2 are fixed 3 was never true anyway.
-
-   Let me to blame a bit.
-   1. TTY module calls this funstion on soft interrupt.
-   2. TTY module calls this function WITH MASKED INTERRUPTS!
-   3. TTY module does not notify us about line discipline
-      shutdown,
-
-   Seems, now it is clean. The solution is to consider netdevice and
-   line discipline sides as two independent threads.
-
-   By-product (not desired): slc? does not feel hangups and remains open.
-   It is supposed, that user level program (dip, diald, slattach...)
-   will catch SIGHUP and make the rest of work.
-
-   I see no way to make more with current tty code. --ANK
- */
-
-/*
  * Close down a SLCAN channel.
  * This means flushing out any pending queues, and then returning. This
  * call is serialized against other ldisc functions.
+ *
+ * We also use this method for a hangup event.
  */
+
 static void slcan_close(struct tty_struct *tty)
 {
 	struct slcan *sl = (struct slcan *) tty->disc_data;
@@ -758,7 +618,15 @@ static void slcan_close(struct tty_struct *tty)
 	if (!sl->leased)
 		sl->line = 0;
 
-	/* Count references from TTY module */
+	/* Flush network side */
+	unregister_netdev(sl->dev);
+	/* This will complete via sl_free_netdev */
+}
+
+static int slcan_hangup(struct tty_struct *tty)
+{
+	slcan_close(tty);
+	return 0;
 }
 
 /* Perform I/O control on an active SLCAN channel. */
@@ -769,11 +637,10 @@ static int slcan_ioctl(struct tty_struct *tty, struct file *file,
 	unsigned int tmp;
 
 	/* First make sure we're connected. */
-	if (!sl || sl->magic != SLCAN_MAGIC) {
+	if (!sl || sl->magic != SLCAN_MAGIC)
 		return -EINVAL;
-	}
 
-	switch(cmd) {
+	switch (cmd) {
 	case SIOCGIFNAME:
 		tmp = strlen(sl->dev->name) + 1;
 		if (copy_to_user((void __user *)arg, sl->dev->name, tmp))
@@ -783,31 +650,22 @@ static int slcan_ioctl(struct tty_struct *tty, struct file *file,
 	case SIOCSIFHWADDR:
 		return -EINVAL;
 
-
-	/* Allow stty to read, but not set, the serial port */
-	case TCGETS:
-	case TCGETA:
-		return n_tty_ioctl(tty, file, cmd, arg);
-
 	default:
-		return -ENOIOCTLCMD;
+		return tty_mode_ioctl(tty, file, cmd, arg);
 	}
 }
 
-static struct tty_ldisc	slc_ldisc = {
-	.owner 		= THIS_MODULE,
-	.magic 		= TTY_LDISC_MAGIC,
-	.name 		= "slcan",
-	.open 		= slcan_open,
-	.close	 	= slcan_close,
+static struct tty_ldisc_ops slc_ldisc = {
+	.owner		= THIS_MODULE,
+	.magic		= TTY_LDISC_MAGIC,
+	.name		= "slcan",
+	.open		= slcan_open,
+	.close		= slcan_close,
+	.hangup		= slcan_hangup,
 	.ioctl		= slcan_ioctl,
 	.receive_buf	= slcan_receive_buf,
 	.write_wakeup	= slcan_write_wakeup,
 };
-
-/************************************
- * general slcan module init/exit
- ************************************/
 
 static int __init slcan_init(void)
 {
@@ -817,19 +675,17 @@ static int __init slcan_init(void)
 		maxdev = 4; /* Sanity */
 
 	printk(banner);
-	printk(KERN_INFO "slcan: %d dynamic interface channels.\n", maxdev );
+	printk(KERN_INFO "slcan: %d dynamic interface channels.\n", maxdev);
 
-	slcan_devs = kmalloc(sizeof(struct net_device *)*maxdev, GFP_KERNEL);
+	slcan_devs = kzalloc(sizeof(struct net_device *)*maxdev, GFP_KERNEL);
 	if (!slcan_devs) {
 		printk(KERN_ERR "slcan: can't allocate slcan device array!\n");
 		return -ENOMEM;
 	}
 
-	/* Clear the pointer array, we allocate devices when we need them */
-	memset(slcan_devs, 0, sizeof(struct net_device *)*maxdev);
-
 	/* Fill in our line protocol discipline, and register it */
-	if ((status = tty_register_ldisc(N_SLCAN, &slc_ldisc)) != 0)  {
+	status = tty_register_ldisc(N_SLCAN, &slc_ldisc);
+	if (status)  {
 		printk(KERN_ERR "slcan: can't register line discipline\n");
 		kfree(slcan_devs);
 	}
@@ -868,6 +724,8 @@ static void __exit slcan_exit(void)
 		}
 	} while (busy && time_before(jiffies, timeout));
 
+	/* FIXME: hangup is async so we should wait when doing this second
+	   phase */
 
 	for (i = 0; i < maxdev; i++) {
 		dev = slcan_devs[i];
@@ -889,10 +747,9 @@ static void __exit slcan_exit(void)
 	kfree(slcan_devs);
 	slcan_devs = NULL;
 
-	if ((i = tty_unregister_ldisc(N_SLCAN)))
-	{
+	i = tty_unregister_ldisc(N_SLCAN);
+	if (i)
 		printk(KERN_ERR "slcan: can't unregister ldisc (err %d)\n", i);
-	}
 }
 
 module_init(slcan_init);
