@@ -186,7 +186,15 @@ EXPORT_SYMBOL(__mtdcr);
 EXPORT_SYMBOL(__mfdcr);
 #endif
 EXPORT_SYMBOL(empty_zero_page);
+
 #ifdef CONFIG_CPM2
 #include <asm/immap_cpm2.h>
 EXPORT_SYMBOL(cpm2_immr);
+#endif
+
+#ifdef CONFIG_PPC64
+EXPORT_SYMBOL(__arch_hweight8);
+EXPORT_SYMBOL(__arch_hweight16);
+EXPORT_SYMBOL(__arch_hweight32);
+EXPORT_SYMBOL(__arch_hweight64);
 #endif
