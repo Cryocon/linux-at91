@@ -398,7 +398,7 @@ void omap_sram_idle(void)
 	if (!is_suspending())
 		if (per_next_state < PWRDM_POWER_ON ||
 		    core_next_state < PWRDM_POWER_ON)
-			if (try_acquire_console_sem())
+			if (!console_trylock())
 				goto console_still_active;
 
 	/* PER */
@@ -481,7 +481,7 @@ void omap_sram_idle(void)
 	}
 
 	if (!is_suspending())
-		release_console_sem();
+		console_unlock();
 
 console_still_active:
 	/* Disable IO-PAD and IO-CHAIN wakeup */
@@ -605,7 +605,7 @@ static void omap3_pm_end(void)
 	return;
 }
 
-static struct platform_suspend_ops omap_pm_ops = {
+static const struct platform_suspend_ops omap_pm_ops = {
 	.begin		= omap3_pm_begin,
 	.end		= omap3_pm_end,
 	.enter		= omap3_pm_enter,

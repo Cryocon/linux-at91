@@ -49,12 +49,18 @@ module_param_named(powersave, i915_powersave, int, 0600);
 unsigned int i915_lvds_downclock = 0;
 module_param_named(lvds_downclock, i915_lvds_downclock, int, 0400);
 
+unsigned int i915_panel_use_ssc = 1;
+module_param_named(lvds_use_ssc, i915_panel_use_ssc, int, 0600);
+
+bool i915_try_reset = true;
+module_param_named(reset, i915_try_reset, bool, 0600);
+
 static struct drm_driver driver;
 extern int intel_agp_enabled;
 
 #define INTEL_VGA_DEVICE(id, info) {		\
 	.class = PCI_CLASS_DISPLAY_VGA << 8,	\
-	.class_mask = 0xffff00,			\
+	.class_mask = 0xff0000,			\
 	.vendor = 0x8086,			\
 	.device = id,				\
 	.subvendor = PCI_ANY_ID,		\
@@ -352,6 +358,9 @@ static int i915_drm_thaw(struct drm_device *dev)
 
 		/* Resume the modeset for every activated CRTC */
 		drm_helper_resume_force_mode(dev);
+
+		if (dev_priv->renderctx && dev_priv->pwrctx)
+			ironlake_enable_rc6(dev);
 	}
 
 	intel_opregion_init(dev);
@@ -474,6 +483,9 @@ int i915_reset(struct drm_device *dev, u8 flags)
 	 */
 	bool need_display = true;
 	int ret;
+
+	if (!i915_try_reset)
+		return 0;
 
 	if (!mutex_trylock(&dev->struct_mutex))
 		return -EBUSY;
@@ -739,6 +751,9 @@ static int __init i915_init(void)
 	if (vgacon_text_force() && i915_modeset == -1)
 		driver.driver_features &= ~DRIVER_MODESET;
 #endif
+
+	if (!(driver.driver_features & DRIVER_MODESET))
+		driver.get_vblank_timestamp = NULL;
 
 	return drm_init(&driver);
 }

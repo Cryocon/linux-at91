@@ -68,6 +68,7 @@ static struct _intel_private {
 	phys_addr_t gma_bus_addr;
 	u32 PGETBL_save;
 	u32 __iomem *gtt;		/* I915G */
+	bool clear_fake_agp; /* on first access via agp, fill with scratch */
 	int num_dcache_entries;
 	union {
 		void __iomem *i9xx_flush_page;
@@ -688,13 +689,13 @@ static int intel_gtt_init(void)
 
 	intel_private.base.stolen_size = intel_gtt_stolen_size();
 
+	intel_private.base.needs_dmar = USE_PCI_DMA_API && INTEL_GTT_GEN > 2;
+
 	ret = intel_gtt_setup_scratch_page();
 	if (ret != 0) {
 		intel_gtt_cleanup();
 		return ret;
 	}
-
-	intel_private.base.needs_dmar = USE_PCI_DMA_API && INTEL_GTT_GEN > 2;
 
 	return 0;
 }
@@ -814,6 +815,12 @@ static bool intel_enable_gtt(void)
 		}
 	}
 
+	/* On the resume path we may be adjusting the PGTBL value, so
+	 * be paranoid and flush all chipset write buffers...
+	 */
+	if (INTEL_GTT_GEN >= 3)
+		writel(0, intel_private.registers+GFX_FLSH_CNTL);
+
 	reg = intel_private.registers+I810_PGETBL_CTL;
 	writel(intel_private.PGETBL_save, reg);
 	if (HAS_PGTBL_EN && (readl(reg) & I810_PGETBL_ENABLED) == 0) {
@@ -822,6 +829,9 @@ static bool intel_enable_gtt(void)
 			readl(reg), intel_private.PGETBL_save);
 		return false;
 	}
+
+	if (INTEL_GTT_GEN >= 3)
+		writel(0, intel_private.registers+GFX_FLSH_CNTL);
 
 	return true;
 }
@@ -860,20 +870,11 @@ static int intel_fake_agp_free_gatt_table(struct agp_bridge_data *bridge)
 
 static int intel_fake_agp_configure(void)
 {
-	int i;
-
 	if (!intel_enable_gtt())
 	    return -EIO;
 
+	intel_private.clear_fake_agp = true;
 	agp_bridge->gart_bus_addr = intel_private.gma_bus_addr;
-
-	for (i = 0; i < intel_private.base.gtt_total_entries; i++) {
-		intel_private.driver->write_entry(intel_private.scratch_page_dma,
-						  i, 0);
-	}
-	readl(intel_private.gtt+i-1);	/* PCI Posting. */
-
-	global_cache_flush();
 
 	return 0;
 }
@@ -936,6 +937,13 @@ static int intel_fake_agp_insert_entries(struct agp_memory *mem,
 {
 	int ret = -EINVAL;
 
+	if (intel_private.clear_fake_agp) {
+		int start = intel_private.base.stolen_size / PAGE_SIZE;
+		int end = intel_private.base.gtt_mappable_entries;
+		intel_gtt_clear_range(start, end - start);
+		intel_private.clear_fake_agp = false;
+	}
+
 	if (INTEL_GTT_GEN == 1 && type == AGP_DCACHE_MEMORY)
 		return i810_insert_dcache_entries(mem, pg_start, type);
 
@@ -991,13 +999,13 @@ static int intel_fake_agp_remove_entries(struct agp_memory *mem,
 	if (mem->page_count == 0)
 		return 0;
 
+	intel_gtt_clear_range(pg_start, mem->page_count);
+
 	if (intel_private.base.needs_dmar) {
 		intel_gtt_unmap_memory(mem->sg_list, mem->num_sg);
 		mem->sg_list = NULL;
 		mem->num_sg = 0;
 	}
-
-	intel_gtt_clear_range(pg_start, mem->page_count);
 
 	return 0;
 }
@@ -1352,7 +1360,7 @@ static const struct intel_gtt_driver_description {
 		&i81x_gtt_driver},
 	{ PCI_DEVICE_ID_INTEL_82830_CGC, "830M",
 		&i8xx_gtt_driver},
-	{ PCI_DEVICE_ID_INTEL_82845G_IG, "830M",
+	{ PCI_DEVICE_ID_INTEL_82845G_IG, "845G",
 		&i8xx_gtt_driver},
 	{ PCI_DEVICE_ID_INTEL_82854_IG, "854",
 		&i8xx_gtt_driver},

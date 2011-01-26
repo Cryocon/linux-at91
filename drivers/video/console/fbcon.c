@@ -375,14 +375,14 @@ static void fb_flashcursor(struct work_struct *work)
 	int c;
 	int mode;
 
-	acquire_console_sem();
+	console_lock();
 	if (ops && ops->currcon != -1)
 		vc = vc_cons[ops->currcon].d;
 
 	if (!vc || !CON_IS_VISIBLE(vc) ||
  	    registered_fb[con2fb_map[vc->vc_num]] != info ||
 	    vc->vc_deccm != 1) {
-		release_console_sem();
+		console_unlock();
 		return;
 	}
 
@@ -392,7 +392,7 @@ static void fb_flashcursor(struct work_struct *work)
 		CM_ERASE : CM_DRAW;
 	ops->cursor(vc, info, mode, softback_lines, get_color(vc, info, c, 1),
 		    get_color(vc, info, c, 0));
-	release_console_sem();
+	console_unlock();
 }
 
 static void cursor_timer_handler(unsigned long dev_addr)
@@ -836,7 +836,7 @@ static int set_con2fb_map(int unit, int newidx, int user)
 
 	found = search_fb_in_map(newidx);
 
-	acquire_console_sem();
+	console_lock();
 	con2fb_map[unit] = newidx;
 	if (!err && !found)
  		err = con2fb_acquire_newinfo(vc, info, unit, oldidx);
@@ -863,7 +863,7 @@ static int set_con2fb_map(int unit, int newidx, int user)
 	if (!search_fb_in_map(info_idx))
 		info_idx = newidx;
 
-	release_console_sem();
+	console_unlock();
  	return err;
 }
 
@@ -3328,7 +3328,7 @@ static ssize_t store_rotate(struct device *device,
 	if (fbcon_has_exited)
 		return count;
 
-	acquire_console_sem();
+	console_lock();
 	idx = con2fb_map[fg_console];
 
 	if (idx == -1 || registered_fb[idx] == NULL)
@@ -3338,7 +3338,7 @@ static ssize_t store_rotate(struct device *device,
 	rotate = simple_strtoul(buf, last, 0);
 	fbcon_rotate(info, rotate);
 err:
-	release_console_sem();
+	console_unlock();
 	return count;
 }
 
@@ -3353,7 +3353,7 @@ static ssize_t store_rotate_all(struct device *device,
 	if (fbcon_has_exited)
 		return count;
 
-	acquire_console_sem();
+	console_lock();
 	idx = con2fb_map[fg_console];
 
 	if (idx == -1 || registered_fb[idx] == NULL)
@@ -3363,7 +3363,7 @@ static ssize_t store_rotate_all(struct device *device,
 	rotate = simple_strtoul(buf, last, 0);
 	fbcon_rotate_all(info, rotate);
 err:
-	release_console_sem();
+	console_unlock();
 	return count;
 }
 
@@ -3376,7 +3376,7 @@ static ssize_t show_rotate(struct device *device,
 	if (fbcon_has_exited)
 		return 0;
 
-	acquire_console_sem();
+	console_lock();
 	idx = con2fb_map[fg_console];
 
 	if (idx == -1 || registered_fb[idx] == NULL)
@@ -3385,7 +3385,7 @@ static ssize_t show_rotate(struct device *device,
 	info = registered_fb[idx];
 	rotate = fbcon_get_rotate(info);
 err:
-	release_console_sem();
+	console_unlock();
 	return snprintf(buf, PAGE_SIZE, "%d\n", rotate);
 }
 
@@ -3399,7 +3399,7 @@ static ssize_t show_cursor_blink(struct device *device,
 	if (fbcon_has_exited)
 		return 0;
 
-	acquire_console_sem();
+	console_lock();
 	idx = con2fb_map[fg_console];
 
 	if (idx == -1 || registered_fb[idx] == NULL)
@@ -3413,7 +3413,7 @@ static ssize_t show_cursor_blink(struct device *device,
 
 	blink = (ops->flags & FBCON_FLAGS_CURSOR_TIMER) ? 1 : 0;
 err:
-	release_console_sem();
+	console_unlock();
 	return snprintf(buf, PAGE_SIZE, "%d\n", blink);
 }
 
@@ -3428,7 +3428,7 @@ static ssize_t store_cursor_blink(struct device *device,
 	if (fbcon_has_exited)
 		return count;
 
-	acquire_console_sem();
+	console_lock();
 	idx = con2fb_map[fg_console];
 
 	if (idx == -1 || registered_fb[idx] == NULL)
@@ -3450,7 +3450,7 @@ static ssize_t store_cursor_blink(struct device *device,
 	}
 
 err:
-	release_console_sem();
+	console_unlock();
 	return count;
 }
 
@@ -3489,7 +3489,7 @@ static void fbcon_start(void)
 	if (num_registered_fb) {
 		int i;
 
-		acquire_console_sem();
+		console_lock();
 
 		for (i = 0; i < FB_MAX; i++) {
 			if (registered_fb[i] != NULL) {
@@ -3498,7 +3498,7 @@ static void fbcon_start(void)
 			}
 		}
 
-		release_console_sem();
+		console_unlock();
 		fbcon_takeover(0);
 	}
 }
@@ -3559,7 +3559,7 @@ static int __init fb_console_init(void)
 {
 	int i;
 
-	acquire_console_sem();
+	console_lock();
 	fb_register_client(&fbcon_event_notifier);
 	fbcon_device = device_create(fb_class, NULL, MKDEV(0, 0), NULL,
 				     "fbcon");
@@ -3575,7 +3575,7 @@ static int __init fb_console_init(void)
 	for (i = 0; i < MAX_NR_CONSOLES; i++)
 		con2fb_map[i] = -1;
 
-	release_console_sem();
+	console_unlock();
 	fbcon_start();
 	return 0;
 }
@@ -3598,12 +3598,12 @@ static void __exit fbcon_deinit_device(void)
 
 static void __exit fb_console_exit(void)
 {
-	acquire_console_sem();
+	console_lock();
 	fb_unregister_client(&fbcon_event_notifier);
 	fbcon_deinit_device();
 	device_destroy(fb_class, MKDEV(0, 0));
 	fbcon_exit();
-	release_console_sem();
+	console_unlock();
 	unregister_con_driver(&fb_con);
 }	
 
