@@ -3002,7 +3002,7 @@ int __init vty_init(const struct file_operations *console_fops)
 	if (IS_ERR(tty0dev))
 		tty0dev = NULL;
 	else
-		device_create_file(tty0dev, &dev_attr_active);
+		WARN_ON(device_create_file(tty0dev, &dev_attr_active) < 0);
 
 	vcs_init();
 
@@ -3553,7 +3553,7 @@ int register_con_driver(const struct consw *csw, int first, int last)
 
 		/* already registered */
 		if (con_driver->con == csw)
-			retval = -EINVAL;
+			retval = -EBUSY;
 	}
 
 	if (retval)
@@ -3664,7 +3664,12 @@ int take_over_console(const struct consw *csw, int first, int last, int deflt)
 	int err;
 
 	err = register_con_driver(csw, first, last);
-
+	/* if we get an busy error we still want to bind the console driver
+	 * and return success, as we may have unbound the console driver
+	 * but not unregistered it.
+	*/
+	if (err == -EBUSY)
+		err = 0;
 	if (!err)
 		bind_con_driver(csw, first, last, deflt);
 
