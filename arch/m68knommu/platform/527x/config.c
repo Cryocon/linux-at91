@@ -35,15 +35,15 @@ void parse_uboot_commandline(char *commandp, int size);
 
 static struct mcf_platform_uart m527x_uart_platform[] = {
 	{
-		.mapbase	= MCF_MBAR + MCFUART_BASE1,
+		.mapbase	= MCFUART_BASE1,
 		.irq		= MCFINT_VECBASE + MCFINT_UART0,
 	},
 	{
-		.mapbase 	= MCF_MBAR + MCFUART_BASE2,
+		.mapbase 	= MCFUART_BASE2,
 		.irq		= MCFINT_VECBASE + MCFINT_UART1,
 	},
 	{
-		.mapbase 	= MCF_MBAR + MCFUART_BASE3,
+		.mapbase 	= MCFUART_BASE3,
 		.irq		= MCFINT_VECBASE + MCFINT_UART2,
 	},
 	{ },
@@ -57,8 +57,8 @@ static struct platform_device m527x_uart = {
 
 static struct resource m527x_fec0_resources[] = {
 	{
-		.start		= MCF_MBAR + 0x1000,
-		.end		= MCF_MBAR + 0x1000 + 0x7ff,
+		.start		= MCFFEC_BASE0,
+		.end		= MCFFEC_BASE0 + MCFFEC_SIZE0 - 1,
 		.flags		= IORESOURCE_MEM,
 	},
 	{
@@ -80,8 +80,8 @@ static struct resource m527x_fec0_resources[] = {
 
 static struct resource m527x_fec1_resources[] = {
 	{
-		.start		= MCF_MBAR + 0x1800,
-		.end		= MCF_MBAR + 0x1800 + 0x7ff,
+		.start		= MCFFEC_BASE1,
+		.end		= MCFFEC_BASE1 + MCFFEC_SIZE1 - 1,
 		.flags		= IORESOURCE_MEM,
 	},
 	{
