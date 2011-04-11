@@ -1013,7 +1013,7 @@ static int aead_perform(struct aead_request *req, int encrypt,
 	memcpy(crypt->iv, req->iv, ivsize);
 
 	if (req->src != req->dst) {
-		BUG(); /* -ENOTSUP because of my lazyness */
+		BUG(); /* -ENOTSUP because of my laziness */
 	}
 
 	/* ASSOC data */
