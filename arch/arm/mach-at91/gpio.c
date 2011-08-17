@@ -73,7 +73,8 @@ static int gpio_banks;
 /*
  * Functionnality can change with newer chips
  */
-#define cpu_has_pio3()	(cpu_is_at91sam9x5())
+#define cpu_has_pio3()	(cpu_is_at91sam9x5() \
+			||cpu_is_at91sam9n12())
 
 
 static inline void __iomem *pin_to_controller(unsigned pin)

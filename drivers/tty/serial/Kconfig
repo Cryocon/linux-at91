@@ -371,7 +371,7 @@ config SERIAL_ATMEL_CONSOLE
 
 config SERIAL_ATMEL_PDC
 	bool "Support DMA transfers on AT91 / AT32 serial port"
-	depends on SERIAL_ATMEL && !(ARCH_AT91SAM9X5)
+	depends on SERIAL_ATMEL && !(ARCH_AT91SAM9X5 || ARCH_AT91SAM9N12)
 	default y
 	help
 	  Say Y here if you wish to use the PDC to do DMA transfers to
@@ -386,7 +386,7 @@ config SERIAL_ATMEL_PDC
 
 config SERIAL_ATMEL_DMA
 	bool "Atmel Serial DMA support"
-	depends on SERIAL_ATMEL && ARCH_AT91SAM9X5 && DMA_ENGINE && EXPERIMENTAL
+	depends on SERIAL_ATMEL && (ARCH_AT91SAM9X5 || ARCH_AT91SAM9N12) && DMA_ENGINE && EXPERIMENTAL
 	default y
 	help
 	  Say Y here to have the Atmel serial driver use a DMA engine to do data

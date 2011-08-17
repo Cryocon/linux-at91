@@ -27,7 +27,8 @@
 
 #include "atmel_tsadcc.h"
 
-#define cpu_has_9x5_adc() (cpu_is_at91sam9x5())
+#define cpu_has_9x5_adc() (cpu_is_at91sam9x5() || \
+				cpu_is_at91sam9n12())
 
 #define ADC_DEFAULT_CLOCK	100000
 #define ZTHRESHOLD		3200

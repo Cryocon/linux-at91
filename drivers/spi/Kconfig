@@ -76,7 +76,7 @@ config SPI_ATMEL
 
 config SPI_ATMEL_DMA
 	bool "Atmel SPI DMA support"
-	depends on SPI_ATMEL && (ARCH_AT91SAM9G45 || ARCH_AT91SAM9X5) && DMA_ENGINE && EXPERIMENTAL
+	depends on SPI_ATMEL && (ARCH_AT91SAM9G45 || ARCH_AT91SAM9X5 || ARCH_AT91SAM9N12) && DMA_ENGINE && EXPERIMENTAL
 	default y
 	help
 	  Say Y here if you want the Atmel SPI driver to use the DMA engine. Data transfers

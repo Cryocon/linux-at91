@@ -311,6 +311,7 @@ void ssc_free(struct ssc_device *ssc);
 #define ssc_readl(base, reg)		__raw_readl(base + SSC_##reg)
 #define ssc_writel(base, reg, value)	__raw_writel((value), base + SSC_##reg)
 
-#define ssc_use_dmaengine()	cpu_is_at91sam9x5()
+#define ssc_use_dmaengine()	(cpu_is_at91sam9x5() || \
+				cpu_is_at91sam9n12())
 
 #endif /* __INCLUDE_ATMEL_SSC_H */

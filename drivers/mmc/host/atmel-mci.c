@@ -236,12 +236,19 @@ static bool mci_has_rwproof(void)
  */
 static inline bool atmci_is_mci2(void)
 {
-	if (cpu_is_at91sam9g45() || cpu_is_at91sam9x5())
+	if (cpu_is_at91sam9g45() || cpu_is_at91sam9x5() || cpu_is_at91sam9n12())
 		return true;
 
 	return false;
 }
 
+static inline bool atmci_is_div2(void)
+{
+	if (cpu_is_at91sam9x5() || cpu_is_at91sam9n12())
+		return true;
+
+	return false;
+}
 
 /*
  * The debugfs stuff below is mostly optimized away when
@@ -943,7 +950,7 @@ static void atmci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		}
 
 		/* Calculate clock divider */
-		if (!cpu_is_at91sam9x5()) {
+		if (!atmci_is_div2()) {
 			clkdiv = DIV_ROUND_UP(host->bus_hz, 2 * clock_min) - 1;
 			if (clkdiv > 255) {
 				dev_warn(&mmc->class_dev,

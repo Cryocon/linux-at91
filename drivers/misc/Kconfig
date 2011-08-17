@@ -94,7 +94,7 @@ config ATMEL_TCLIB
 config ATMEL_TCB_CLKSRC
 	bool "TC Block Clocksource"
 	depends on ATMEL_TCLIB
-	select ATMEL_TCB_CLKSRC_32BIT if ARCH_AT91SAM9X5
+	select ATMEL_TCB_CLKSRC_32BIT if ARCH_AT91SAM9X5 || ARCH_AT91SAM9N12
 	default y
 	help
 	  Select this to get a high precision clocksource based on a
