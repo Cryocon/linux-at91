@@ -44,8 +44,6 @@
 #include <mach/at91sam9_smc.h>
 #include <mach/at91_shdwc.h>
 
-#include <linux/usb/android_composite.h>
-
 #include "sam9_smc.h"
 #include "generic.h"
 #include <mach/board-sam9x5.h>
@@ -114,135 +112,6 @@ static struct mci_platform_data __initdata mci1_data = {
 		.wp_pin		= -1,
 	},
 };
-
-/*
-  *  Android ADB
-  */
-static char *usb_functions_ums[] = {
-	"usb_mass_storage",
-};
-
-static char *usb_functions_ums_adb[] = {
-	"usb_mass_storage",
-	"adb",
-};
-
-static char *usb_functions_rndis[] = {
-	"rndis",
-};
-
-static char *usb_functions_rndis_adb[] = {
-	"rndis",
-	"adb",
-};
-
-#ifdef CONFIG_USB_ANDROID_DIAG
-static char *usb_functions_adb_diag[] = {
-	"usb_mass_storage",
-	"adb",
-	"diag",
-};
-#endif
-
-static char *usb_functions_all[] = {
-#ifdef CONFIG_USB_ANDROID_RNDIS
-	"rndis",
-#endif
-	"usb_mass_storage",
-	"adb",
-#ifdef CONFIG_USB_ANDROID_ACM
-	"acm",
-#endif
-#ifdef CONFIG_USB_ANDROID_DIAG
-	"diag",
-#endif
-};
-
-static struct android_usb_product usb_products[] = {
-	{
-		.product_id	= 0x6129,
-		.num_functions	= ARRAY_SIZE(usb_functions_ums),
-		.functions	= usb_functions_ums,
-	},
-	{
-		.product_id	= 0x6155,
-		.num_functions	= ARRAY_SIZE(usb_functions_ums_adb),
-		.functions	= usb_functions_ums_adb,
-	},
-	{
-		.product_id	= 0x6156,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis),
-		.functions	= usb_functions_rndis,
-	},
-	{
-		.product_id	= 0x6157,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
-		.functions	= usb_functions_rndis_adb,
-	},
-#ifdef CONFIG_USB_ANDROID_DIAG
-	{
-		.product_id	= 0x6158,
-		.num_functions	= ARRAY_SIZE(usb_functions_adb_diag),
-		.functions	= usb_functions_adb_diag,
-	},
-#endif
-};
-
-static struct usb_mass_storage_platform_data mass_storage_pdata = {
-	.nluns		= 1,
-	.vendor		= "ATMEL",
-	.product	= "SAM9X5",
-	.release	= 0x0100,
-};
-
-static struct platform_device usb_mass_storage_device = {
-	.name	= "usb_mass_storage",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &mass_storage_pdata,
-	},
-};
-
-#ifdef CONFIG_USB_ANDROID_RNDIS
-static struct usb_ether_platform_data rndis_pdata = {
-	/* ethaddr is filled by board_serialno_setup */
-	.vendorID	= 0x03EB,
-	.vendorDescr	= "ATMEL",
-};
-
-static struct platform_device rndis_device = {
-	.name	= "rndis",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &rndis_pdata,
-	},
-};
-#endif
-
-static struct android_usb_platform_data android_usb_pdata = {
-	.vendor_id	= 0x03EB,
-	.product_id	= 0x6129,
-	.version	= 0x0100,
-	.product_name		= "SAM9X5",
-	.manufacturer_name	= "ATMEL",
-	.num_products = ARRAY_SIZE(usb_products),
-	.products = usb_products,
-	.num_functions = ARRAY_SIZE(usb_functions_all),
-	.functions = usb_functions_all,
-};
-
-static struct platform_device android_usb_device = {
-	.name	= "android_usb",
-	.id		= -1,
-	.dev		= {
-		.platform_data = &android_usb_pdata,
-	},
-};
-
-static void __init at91_usb_adb_init(void){
-	platform_device_register(&android_usb_device);
-	platform_device_register(&usb_mass_storage_device);
-}
 
 /*
  *  ISI
@@ -504,22 +373,11 @@ static void __init ek_board_configure_pins(void)
 	}
 }
 
-/*
- * BATTERY
- */
-static struct platform_device battery = {
-	.name = "dummy-battery",
-	.id   = -1,
-};
-
-static void __init at91_init_battery(void)
-{
-	platform_device_register(&battery);
-}
-
 static void __init ek_board_init(void)
 {
 	u32 cm_config;
+	int i;
+	bool config_isi_enabled = false;
 
 	cm_board_init(&cm_config);
 	ek_board_configure_pins();
@@ -533,11 +391,8 @@ static void __init ek_board_init(void)
 	/* Ethernet */
 	at91_add_device_eth(0, &ek_macb0_data);
 	at91_add_device_eth(1, &ek_macb1_data);
-	/* MMC */
+	/* MMC0 */
 	at91_add_device_mci(0, &mci0_data);
-	/* Conflict between SPI0 and MCI1 pins */
-	if (!(cm_config & CM_CONFIG_SPI0_ENABLE))
-		at91_add_device_mci(1, &mci1_data);
 	/* I2C */
 	if (cm_config & CM_CONFIG_I2C0_ENABLE)
 		i2c_register_board_info(0,
@@ -549,18 +404,35 @@ static void __init ek_board_init(void)
 	if (cpu_is_at91sam9g25()) {
 		/* ISI */
 		/* NOTE: PCK0 provides ISI_MCK to the ISI module.
-		   ISI's PWD pin conflict with MCI1_CK due the hardware design.
+		 * ISI's PWD pin (PA13) conflicts with MCI1_CK, and SPI0_SPCK
+		 * due to hardware design.
+		 * Do not add ISI device if SPI0 is enabled.
 		 */
-		platform_add_devices(soc_camera_devices,
+		 if (!(cm_config & CM_CONFIG_SPI0_ENABLE)) {
+			platform_add_devices(soc_camera_devices,
 					ARRAY_SIZE(soc_camera_devices));
-		isi_set_clk();
-		at91_add_device_isi(&isi_data);
+			isi_set_clk();
+			at91_add_device_isi(&isi_data);
+			for (i = 0; i < ARRAY_SIZE(soc_camera_devices); i++) {
+				if (soc_camera_devices[i]->name != NULL) {
+					config_isi_enabled = true;
+					break;
+				}
+			}
+		 }
 	} else if (!cpu_is_at91sam9x25()) {
 		/* LCD Controller */
 		at91_add_device_lcdc(&ek_lcdc_data);
 		/* Touch Screen */
 		at91_add_device_tsadcc(&ek_tsadcc_data);
 	}
+
+	/* MMC1 */
+	/* Conflict between SPI0, MCI1 and ISI pins.
+	 * add MCI1 only if SPI0 and ISI are both disabled.
+	 */
+	if (!(cm_config & CM_CONFIG_SPI0_ENABLE) && !config_isi_enabled)
+		at91_add_device_mci(1, &mci1_data);
 
 #if 0
 	if (cpu_is_at91sam9x25() || cpu_is_at91sam9x35())
@@ -583,15 +455,18 @@ static void __init ek_board_init(void)
 	/* SSC (for WM8731) */
 	at91_add_device_ssc(AT91SAM9X5_ID_SSC, ATMEL_SSC_TX | ATMEL_SSC_RX);
 
-	at91_init_battery();
-
 	if (ek_is_revA())
 		printk(KERN_CRIT "AT91: EK rev A\n");
 	else
 		printk(KERN_CRIT "AT91: EK rev B and higher\n");
 
-	/*usb adb*/
-	at91_usb_adb_init();
+	/* print conflict information */
+	if (cm_config & CM_CONFIG_SPI0_ENABLE)
+		printk(KERN_CRIT
+			"AT91: SPI0 conflicts with MCI1 and ISI, disable MCI1 and ISI\n");
+	else if (config_isi_enabled)
+		printk(KERN_CRIT
+			"AT91: ISI conficts with MCI1, disable MCI1\n");
 }
 
 MACHINE_START(AT91SAM9X5EK, "Atmel AT91SAM9X5-EK")
