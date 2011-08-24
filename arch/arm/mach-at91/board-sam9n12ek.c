@@ -131,9 +131,10 @@ static struct mtd_partition * __init nand_partitions(int size, int *num_partitio
 static struct atmel_nand_data __initdata ek_nand_data = {
 	.ale		= 21,
 	.cle		= 22,
-	.rdy_pin	= AT91_PIN_PC8,
-	.enable_pin	= AT91_PIN_PC14,
+	.rdy_pin	= AT91_PIN_PD5,
+	.enable_pin	= AT91_PIN_PD4,
 	.partition_info	= nand_partitions,
+	.bus_on_d0 = 1,
 #if defined(CONFIG_MTD_NAND_ATMEL_BUSWIDTH_16)
 	.bus_width_16	= 1,
 #else
@@ -145,18 +146,18 @@ static struct sam9_smc_config __initdata ek_nand_smc_config = {
 	.ncs_read_setup		= 0,
 	.nrd_setup		= 2,
 	.ncs_write_setup	= 0,
-	.nwe_setup		= 2,
+	.nwe_setup		= 1,
 
-	.ncs_read_pulse		= 4,
+	.ncs_read_pulse		= 6,
 	.nrd_pulse		= 4,
-	.ncs_write_pulse	= 4,
-	.nwe_pulse		= 4,
+	.ncs_write_pulse	= 5,
+	.nwe_pulse		= 3,
 
 	.read_cycle		= 7,
-	.write_cycle		= 7,
+	.write_cycle		= 5,
 
 	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
-	.tdf_cycles		= 3,
+	.tdf_cycles		= 1,
 };
 
 static void __init ek_add_device_nand(void)
