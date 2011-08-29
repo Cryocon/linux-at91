@@ -101,7 +101,7 @@ static struct spi_board_info ek_spi_devices[] = {
 static struct mci_platform_data __initdata mci_data = {
 	.slot[0] = {
 		.bus_width	= 4,
-		.detect_pin	= AT91_PIN_PD10,
+		.detect_pin	= AT91_PIN_PA7,
 	},
 };
 
