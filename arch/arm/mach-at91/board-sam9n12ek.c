@@ -69,6 +69,74 @@ static void __init ek_init_irq(void)
 }
 
 /*
+ * KS8851 ethernet device
+ */
+#if defined(CONFIG_KS8851_MLL)
+static struct resource ks8851_resource[] = {
+	[0] = {
+		.start	= AT91_CHIPSELECT_2,
+		.end	= AT91_CHIPSELECT_2 + 0x1,
+		.flags	= IORESOURCE_MEM
+	},
+	[1] = {
+		.start	= AT91_CHIPSELECT_2 + 0x2,
+		.end	= AT91_CHIPSELECT_2 + 0xFF,
+		.flags	= IORESOURCE_MEM
+	},
+	[2] = {
+		.start	= AT91_PIN_PD21,
+		.end	= AT91_PIN_PD21,
+		.flags	= IORESOURCE_IRQ
+			| IORESOURCE_IRQ_LOWEDGE | IORESOURCE_IRQ_HIGHEDGE,
+	}
+};
+
+static struct platform_device ks8851_device = {
+	.name		= "ks8851_mll",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(ks8851_resource),
+	.resource	= ks8851_resource,
+};
+
+/*
+ * SMC timings for the KS8851.
+ * Note: These timings were calculated
+ * for MASTER_CLOCK = 100000000 according to the KS8851 timings.
+ */
+static struct sam9_smc_config __initdata ks8851_smc_config = {
+	.ncs_read_setup		= 0,
+	.nrd_setup		= 1,
+	.ncs_write_setup	= 0,
+	.nwe_setup		= 2,
+
+	.ncs_read_pulse		= 6,
+	.nrd_pulse		= 6,
+	.ncs_write_pulse	= 6,
+	.nwe_pulse		= 6,
+
+	.read_cycle		= 8,
+	.write_cycle		= 8,
+
+	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE | AT91_SMC_BAT_WRITE | AT91_SMC_DBW_16,
+	.tdf_cycles		= 1,
+};
+
+static void __init ek_add_device_ks8851(void)
+{
+	/* Configure chip-select 2 (KS8851) */
+	sam9_smc_configure(2, &ks8851_smc_config);
+	/* Configure NCS signal */
+	at91_set_B_periph(AT91_PIN_PD19, 0);
+	/* Configure Interrupt pin as input, no pull-up */
+	at91_set_gpio_input(AT91_PIN_PD21, 0);
+
+	platform_device_register(&ks8851_device);
+}
+#else
+static void __init ek_add_device_ks8851(void) {}
+#endif /* CONFIG_KS8851 */
+
+/*
  * USB FS Host port
  */
 static struct at91_usbh_data __initdata ek_usbh_fs_data = {
@@ -373,6 +441,8 @@ static void __init ek_board_init(void)
 	ek_add_device_nand();
 	/* I2C */
 	at91_add_device_i2c(0, NULL, 0);
+	/* KS8851 ethernet */
+	ek_add_device_ks8851();
 	/* LCD Controller */
 	at91_add_device_lcdc(&ek_lcdc_data);
 	/* Touch Screen */
