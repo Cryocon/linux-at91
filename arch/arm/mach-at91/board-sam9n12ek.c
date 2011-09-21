@@ -72,16 +72,15 @@ static void __init ek_init_irq(void)
  * USB FS Host port
  */
 static struct at91_usbh_data __initdata ek_usbh_fs_data = {
-	.ports		= 2,
-	.vbus_pin   = {AT91_PIN_PC24, AT91_PIN_PC23},
+	.ports		= 1,
+	.vbus_pin	= { AT91_PIN_PB7 },
 };
 
 /*
  * USB FS Device port
  */
 static struct at91_udc_data __initdata ek_udc_data = {
-	.vbus_pin   = AT91_PIN_PC0,
-	/* .pullup_pin = 0,       puul-up driven by UDC */
+	.vbus_pin	= AT91_PIN_PB16,
 };
 
 /*
