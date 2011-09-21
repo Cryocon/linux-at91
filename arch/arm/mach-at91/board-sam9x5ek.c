@@ -246,6 +246,10 @@ static struct fb_monspecs at91fb_default_monspecs = {
 static struct atmel_lcdfb_info __initdata ek_lcdc_data = {
 	.lcdcon_is_backlight		= true,
 	.alpha_enabled			= false,
+	.pixel_clock_polarity		= LCDC_LCDCFG0_CLKPOL,
+	.pwm_clock_select		= LCDC_LCDCFG0_CLKPWMSEL,
+	.pwm_clock_prescaler		= LCDC_LCDCFG6_PWMPS_DIV_1,
+	.pwm_polarity			= LCDC_LCDCFG6_PWMPOL,
 	.default_bpp			= 16,
 	/* Reserve enough memory for 32bpp */
 	.smem_len			= 800 * 480 * 4,

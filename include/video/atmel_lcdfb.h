@@ -86,6 +86,10 @@ struct atmel_lcdfb_info {
 	bool			alpha_enabled;
 	u8			saved_lcdcon;
 
+	u8			pixel_clock_polarity;
+	u8			pwm_clock_select;
+	u8			pwm_clock_prescaler;
+	u8			pwm_polarity;
 	u8			default_bpp;
 	u8			lcd_wiring_mode;
 	unsigned int		default_lcdcon2;
