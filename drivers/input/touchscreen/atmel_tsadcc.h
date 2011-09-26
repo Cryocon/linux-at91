@@ -135,7 +135,7 @@
 #define	  ATMEL_TSADCC_PRESSR_Z2	(0x3ff << 16)	/* Data of Z2 Measurement */
 
 /* 9x5 ADC registers which conflict with previous definition */
-#ifdef CONFIG_ARCH_AT91SAM9X5
+#if (defined(CONFIG_ARCH_AT91SAM9X5) || defined(CONFIG_ARCH_AT91SAM9N12))
 #undef	 ATMEL_TSADCC_TRGR
 #undef	 ATMEL_TSADCC_SR
 #define ATMEL_TSADCC_SR		ATMEL_TSADCC_ISR
