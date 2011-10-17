@@ -969,8 +969,10 @@ void __init at91_add_device_ssc(unsigned id, unsigned pins)
 		atslave->reg_width = AT_DMA_SLAVE_WIDTH_16BIT;
 		atslave->cfg = ATC_FIFOCFG_HALFFIFO
 				| ATC_SRC_H2SEL_HW | ATC_DST_H2SEL_HW
-				| ATC_SRC_PER(AT_DMA_ID_SSC_RX)
-				| ATC_DST_PER(AT_DMA_ID_SSC_TX);
+				| ATC_SRC_PER(AT_DMA_ID_SSC_RX & 0xf)
+				| (((AT_DMA_ID_SSC_RX & 0x30) >> 4) << 10)
+				| ATC_DST_PER(AT_DMA_ID_SSC_TX & 0xf)
+				| (((AT_DMA_ID_SSC_TX & 0x30) >> 4) << 14);
 #endif
 
 		pdev = &at91sam9n12_ssc_device;
