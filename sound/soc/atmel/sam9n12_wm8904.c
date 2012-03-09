@@ -39,6 +39,11 @@
 
 static struct clk *mclk;
 
+static const struct snd_soc_dapm_route intercon[] = {
+	{ "MICBIAS", NULL, "IN1L" },
+	{ "Left Capture Mux", NULL, "MICBIAS" },
+};
+
 static int at91sam9n12_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params)
 {
@@ -111,6 +116,9 @@ static int at91sam9n12_wm8904_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_enable_pin(dapm, "IN1L");
 	snd_soc_dapm_enable_pin(dapm, "IN2L");
 	snd_soc_dapm_enable_pin(dapm, "IN2R");
+	snd_soc_dapm_enable_pin(dapm, "MICBIAS");
+
+	snd_soc_dapm_add_routes(dapm, intercon, ARRAY_SIZE(intercon));
 
 	snd_soc_dapm_sync(dapm);
 
