@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/flash.h>
 #include <linux/spi/spi.h>
@@ -167,6 +168,11 @@ static struct atmel_nand_data __initdata cm_nand_data = {
 	.ale		= 21,
 	.cle		= 22,
 	.enable_pin	= AT91_PIN_PD4,
+	.ecc_mode	= NAND_ECC_HW,
+	.has_pmecc	= 1,
+	.pmecc_corr_cap	= 2,
+	.pmecc_sector_size = 512,
+	.pmecc_lookup_table_offset = 0x8000,
 	.partition_info	= nand_partitions,
 #if defined(CONFIG_MTD_NAND_AT91_BUSWIDTH_16)
 	.bus_width_16	= 1,
