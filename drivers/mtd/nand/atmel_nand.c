@@ -755,7 +755,7 @@ normal_check:
 }
 
 static int atmel_nand_pmecc_read_page(struct mtd_info *mtd,
-	struct nand_chip *chip, uint8_t *buf, int oob_required, int page)
+	struct nand_chip *chip, uint8_t *buf, int page)
 {
 	struct atmel_nand_host *host = chip->priv;
 	int eccsize = chip->ecc.size;
@@ -792,8 +792,8 @@ static int atmel_nand_pmecc_read_page(struct mtd_info *mtd,
 	return 0;
 }
 
-static int atmel_nand_pmecc_write_page(struct mtd_info *mtd,
-		struct nand_chip *chip, const uint8_t *buf, int oob_required)
+static void atmel_nand_pmecc_write_page(struct mtd_info *mtd,
+		struct nand_chip *chip, const uint8_t *buf)
 {
 	struct atmel_nand_host *host = chip->priv;
 	uint32_t *eccpos = chip->ecc.layout->eccpos;
@@ -815,7 +815,7 @@ static int atmel_nand_pmecc_write_page(struct mtd_info *mtd,
 	while ((pmecc_readl_relaxed(host->ecc, SR) & PMECC_SR_BUSY)) {
 		if (unlikely(time_after(jiffies, end_time))) {
 			dev_err(host->dev, "PMECC: Timeout to get ECC value.\n");
-			return -EIO;
+			return;
 		}
 		cpu_relax();
 	}
@@ -831,7 +831,7 @@ static int atmel_nand_pmecc_write_page(struct mtd_info *mtd,
 	}
 	chip->write_buf(mtd, chip->oob_poi, mtd->oobsize);
 
-	return 0;
+	return;
 }
 
 static void atmel_pmecc_core_init(struct mtd_info *mtd)
@@ -957,7 +957,6 @@ static int __init atmel_pmecc_nand_init_params(struct platform_device *pdev,
 			host->pmecc_lookup_table_offset;
 
 		nand_chip->ecc.steps = 1;
-		nand_chip->ecc.strength = cap;
 		nand_chip->ecc.bytes = host->pmecc_bytes_per_sector *
 				       host->pmecc_sector_number;
 		if (nand_chip->ecc.bytes > mtd->oobsize - 2) {
