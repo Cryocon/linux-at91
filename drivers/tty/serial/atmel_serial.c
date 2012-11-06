@@ -406,6 +406,11 @@ static void atmel_start_tx(struct uart_port *port)
 		UART_PUT_PTCR(port, ATMEL_PDC_TXTEN);
 	}
 
+	if (atmel_use_dma_tx(port)) {
+		if (atmel_port->rs485.flags & SER_RS485_ENABLED)
+			atmel_stop_rx(port);
+	}
+
 	/* Enable interrupts */
 	UART_PUT_IER(port, atmel_port->tx_done_mask);
 }
@@ -415,6 +420,9 @@ static void atmel_start_tx(struct uart_port *port)
  */
 static void atmel_start_rx(struct uart_port *port)
 {
+	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+	struct dma_chan *chan = atmel_port->chan_rx;
+
 	UART_PUT_CR(port, ATMEL_US_RSTSTA);  /* reset status and receiver */
 
 	if (atmel_use_pdc_rx(port)) {
@@ -422,6 +430,10 @@ static void atmel_start_rx(struct uart_port *port)
 		UART_PUT_IER(port, ATMEL_US_ENDRX | ATMEL_US_TIMEOUT |
 			port->read_status_mask);
 		UART_PUT_PTCR(port, ATMEL_PDC_RXTEN);
+	} else if (atmel_use_dma_rx(port)) {
+		/* resume dma transfer */
+		if (chan)
+			chan->device->device_control(chan, DMA_RESUME, 0);
 	} else {
 		UART_PUT_IER(port, ATMEL_US_RXRDY);
 	}
@@ -432,11 +444,18 @@ static void atmel_start_rx(struct uart_port *port)
  */
 static void atmel_stop_rx(struct uart_port *port)
 {
+	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+	struct dma_chan *chan = atmel_port->chan_rx;
+
 	if (atmel_use_pdc_rx(port)) {
 		/* disable PDC receive */
 		UART_PUT_PTCR(port, ATMEL_PDC_RXTDIS);
 		UART_PUT_IDR(port, ATMEL_US_ENDRX | ATMEL_US_TIMEOUT |
 			port->read_status_mask);
+	} else if (atmel_use_dma_rx(port)) {
+		/* pause dma transfer */
+		if (chan)
+			chan->device->device_control(chan, DMA_PAUSE, 0);
 	} else {
 		UART_PUT_IDR(port, ATMEL_US_RXRDY);
 	}
