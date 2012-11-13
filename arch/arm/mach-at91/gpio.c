@@ -112,6 +112,7 @@ static char peripheral_function(void __iomem *pio, unsigned mask)
 	return ret;
 }
 
+#ifdef CONFIG_DEBUG_FS
 static void gpio_printf(struct seq_file *s, void __iomem *pio, unsigned mask)
 {
 	char	*trigger = NULL;
@@ -138,6 +139,7 @@ static void gpio_printf(struct seq_file *s, void __iomem *pio, unsigned mask)
 				__raw_readl(pio + PIO_PDSR) & mask ? "1" : "0");
 	}
 }
+#endif
 
 /*--------------------------------------------------------------------------*/
 

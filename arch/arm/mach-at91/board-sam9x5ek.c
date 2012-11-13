@@ -44,6 +44,8 @@
 #include <mach/at91sam9_smc.h>
 #include <mach/at91_shdwc.h>
 
+#include <linux/usb/android_composite.h>
+
 #include "sam9_smc.h"
 #include "generic.h"
 #include <mach/board-sam9x5.h>
@@ -112,6 +114,135 @@ static struct mci_platform_data __initdata mci1_data = {
 		.wp_pin		= -1,
 	},
 };
+
+/*
+  *  Android ADB
+  */
+static char *usb_functions_ums[] = {
+	"usb_mass_storage",
+};
+
+static char *usb_functions_ums_adb[] = {
+	"usb_mass_storage",
+	"adb",
+};
+
+static char *usb_functions_rndis[] = {
+	"rndis",
+};
+
+static char *usb_functions_rndis_adb[] = {
+	"rndis",
+	"adb",
+};
+
+#ifdef CONFIG_USB_ANDROID_DIAG
+static char *usb_functions_adb_diag[] = {
+	"usb_mass_storage",
+	"adb",
+	"diag",
+};
+#endif
+
+static char *usb_functions_all[] = {
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	"rndis",
+#endif
+	"usb_mass_storage",
+	"adb",
+#ifdef CONFIG_USB_ANDROID_ACM
+	"acm",
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
+	"diag",
+#endif
+};
+
+static struct android_usb_product usb_products[] = {
+	{
+		.product_id	= 0x6129,
+		.num_functions	= ARRAY_SIZE(usb_functions_ums),
+		.functions	= usb_functions_ums,
+	},
+	{
+		.product_id	= 0x6155,
+		.num_functions	= ARRAY_SIZE(usb_functions_ums_adb),
+		.functions	= usb_functions_ums_adb,
+	},
+	{
+		.product_id	= 0x6156,
+		.num_functions	= ARRAY_SIZE(usb_functions_rndis),
+		.functions	= usb_functions_rndis,
+	},
+	{
+		.product_id	= 0x6157,
+		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
+		.functions	= usb_functions_rndis_adb,
+	},
+#ifdef CONFIG_USB_ANDROID_DIAG
+	{
+		.product_id	= 0x6158,
+		.num_functions	= ARRAY_SIZE(usb_functions_adb_diag),
+		.functions	= usb_functions_adb_diag,
+	},
+#endif
+};
+
+static struct usb_mass_storage_platform_data mass_storage_pdata = {
+	.nluns		= 1,
+	.vendor		= "ATMEL",
+	.product	= "SAM9X5",
+	.release	= 0x0100,
+};
+
+static struct platform_device usb_mass_storage_device = {
+	.name	= "usb_mass_storage",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &mass_storage_pdata,
+	},
+};
+
+#ifdef CONFIG_USB_ANDROID_RNDIS
+static struct usb_ether_platform_data rndis_pdata = {
+	/* ethaddr is filled by board_serialno_setup */
+	.vendorID	= 0x03EB,
+	.vendorDescr	= "ATMEL",
+};
+
+static struct platform_device rndis_device = {
+	.name	= "rndis",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &rndis_pdata,
+	},
+};
+#endif
+
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x03EB,
+	.product_id	= 0x6129,
+	.version	= 0x0100,
+	.product_name		= "SAM9X5",
+	.manufacturer_name	= "ATMEL",
+	.num_products = ARRAY_SIZE(usb_products),
+	.products = usb_products,
+	.num_functions = ARRAY_SIZE(usb_functions_all),
+	.functions = usb_functions_all,
+};
+
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+
+static void __init at91_usb_adb_init(void){
+	platform_device_register(&android_usb_device);
+	platform_device_register(&usb_mass_storage_device);
+}
 
 /*
  *  ISI
@@ -373,6 +504,19 @@ static void __init ek_board_configure_pins(void)
 	}
 }
 
+/*
+ * BATTERY
+ */
+static struct platform_device battery = {
+	.name = "dummy-battery",
+	.id   = -1,
+};
+
+static void __init at91_init_battery(void)
+{
+	platform_device_register(&battery);
+}
+
 static void __init ek_board_init(void)
 {
 	u32 cm_config;
@@ -439,10 +583,15 @@ static void __init ek_board_init(void)
 	/* SSC (for WM8731) */
 	at91_add_device_ssc(AT91SAM9X5_ID_SSC, ATMEL_SSC_TX | ATMEL_SSC_RX);
 
+	at91_init_battery();
+
 	if (ek_is_revA())
 		printk(KERN_CRIT "AT91: EK rev A\n");
 	else
 		printk(KERN_CRIT "AT91: EK rev B and higher\n");
+
+	/*usb adb*/
+	at91_usb_adb_init();
 }
 
 MACHINE_START(AT91SAM9X5EK, "Atmel AT91SAM9X5-EK")

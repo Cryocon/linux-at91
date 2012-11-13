@@ -109,16 +109,51 @@ static struct spi_board_info cm_spi_devices[] = {
  * NAND flash
  */
 static struct mtd_partition __initdata cm_nand_partition[] = {
-	{
-		.name	= "Partition 1",
-		.offset	= 0,
-		.size	= SZ_64M,
+#ifdef CONFIG_BLK_DEV_INITRD
+    {
+		.name   = "Bootstrap",
+		.offset = 0,
+		.size   = 5 * 1024 * 1024,
 	},
+
 	{
-		.name	= "Partition 2",
-		.offset	= MTDPART_OFS_NXTBLK,
+		.name	= "system",
+		.offset	= 5 * 1024 * 1024,
+		.size	= 95 * 1024 * 1024,
+	},
+
+	{  
+	    .name   ="userdata",        /*for mtd@userdata*/
+		.offset = 100 * 1024 * 1024,
+		.size   = MTDPART_SIZ_FULL,
+               
+ 	},
+#else
+    {
+		.name   = "Bootstrap",
+		.offset = 0,
+		.size   = 5 * 1024 * 1024,
+	},
+
+	{
+		.name	= "ramdisk",
+		.offset	= 5 * 1024 * 1024,
+		.size	= 95 * 1024 * 1024,
+	},
+
+	{  
+	    .name   ="userdata",        /*for mtd@userdata*/
+		.offset = 100 * 1024 * 1024,
+		.size   = 64 * 1024 * 1024,
+	},		
+	
+	{
+		.name	= "cache",	
+		.offset = 164 * 1024 * 1024, 
 		.size	= MTDPART_SIZ_FULL,
+
 	},
+#endif
 };
 
 static struct mtd_partition * __init nand_partitions(int size, int *num_partitions)

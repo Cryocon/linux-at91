@@ -94,7 +94,7 @@ extern void __init at91_add_device_eth(struct at91_eth_data *data);
 #endif
 
 #if defined(CONFIG_ARCH_AT91SAM9260) || defined(CONFIG_ARCH_AT91SAM9263) || defined(CONFIG_ARCH_AT91SAM9G20) || defined(CONFIG_ARCH_AT91CAP9) \
-	|| defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9X5) || defined(CONFIG_ARCH_AT572D940HF)
+	|| defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9M10) || defined(CONFIG_ARCH_AT91SAM9X5) || defined(CONFIG_ARCH_AT572D940HF)
 #define eth_platform_data	at91_eth_data
 #endif
 
@@ -122,7 +122,7 @@ struct atmel_nand_data {
 extern void __init at91_add_device_nand(struct atmel_nand_data *data);
 
  /* I2C*/
-#if defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9X5)
+#if defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9M10) || defined(CONFIG_ARCH_AT91SAM9X5)
 extern void __init at91_add_device_i2c(short i2c_id, struct i2c_board_info *devices, int nr_devices);
 #else
 extern void __init at91_add_device_i2c(struct i2c_board_info *devices, int nr_devices);

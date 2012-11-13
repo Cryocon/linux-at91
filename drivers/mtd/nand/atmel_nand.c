@@ -52,7 +52,7 @@
 #define no_ecc		0
 #endif
 
-static int use_dma = 1;
+static int use_dma = 0;
 module_param(use_dma, int, 0);
 
 #define NB_ERROR_MAX  25

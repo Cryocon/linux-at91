@@ -264,6 +264,12 @@ void __init at91_add_device_usba(struct usba_platform_data *data)
 	if (data && data->vbus_pin > 0) {
 		at91_set_gpio_input(data->vbus_pin, 0);
 		at91_set_deglitch(data->vbus_pin, 1);
+		/***
+                * Add by embest
+                * We need to disable the power for usb host, so that we could detect usb calbe plug in or plug out
+                * The problem is cause that usb host and usb device share a gpio pin(PD3)
+                */
+              at91_set_gpio_output(AT91_PIN_PD3, 1);
 		usba_udc_data.pdata.vbus_pin = data->vbus_pin;
 	}
 
@@ -445,7 +451,7 @@ void __init at91_add_device_mci(short mmc_id, struct mci_platform_data *data)
 		atslave->cfg |= ATC_SRC_PER(AT_DMA_ID_MCI1)
 			      | ATC_DST_PER(AT_DMA_ID_MCI1);
 
-	data->dma_slave = alt_atslave;
+	data->dma_slave = (struct mci_dma_data *)alt_atslave;
 	}
 #endif
 
@@ -951,10 +957,15 @@ static struct atmel_lcdfb_info lcdc_data;
 static struct resource lcdc_resources[] = {
 	[0] = {
 		.start	= AT91SAM9G45_LCDC_BASE,
-		.end	= AT91SAM9G45_LCDC_BASE + SZ_4K - 1,
+		.end	= AT91SAM9G45_LCDC_BASE + (SZ_4K - SZ_1K)  - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
+		.start	= AT91SAM9G45_LCDC_BASE + ATMEL_LCDC_LUT,
+		.end	= AT91SAM9G45_LCDC_BASE + ATMEL_LCDC_LUT + SZ_1K - 1,
+		.flags	= IORESOURCE_MEM,
+	},	
+	[2] = {
 		.start	= AT91SAM9G45_ID_LCDC,
 		.end	= AT91SAM9G45_ID_LCDC,
 		.flags	= IORESOURCE_IRQ,

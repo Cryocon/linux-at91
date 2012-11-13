@@ -46,6 +46,8 @@
 #include <mach/at91sam9_smc.h>
 #include <mach/at91_shdwc.h>
 
+#include <linux/usb/android_composite.h>
+
 #include "sam9_smc.h"
 #include "generic.h"
 
@@ -77,7 +79,12 @@ static void __init ek_init_irq(void)
  */
 static struct at91_usbh_data __initdata ek_usbh_hs_data = {
 	.ports		= 2,
-	.vbus_pin	= {AT91_PIN_PD1, AT91_PIN_PD3},
+/*
+  * Change by embest
+  * We need to detect the interrup of vbus pin when we plugin/out usb cable
+  * So we need to disable the power of PD3.This is because usb device and usb host share a usb port
+  */
+	.vbus_pin		= {AT91_PIN_PD1},
 };
 
 
@@ -120,7 +127,6 @@ static struct mci_platform_data __initdata mci1_data = {
 	},
 };
 
-
 /*
  * MACB Ethernet device
  */
@@ -134,16 +140,52 @@ static struct at91_eth_data __initdata ek_macb_data = {
  * NAND flash
  */
 static struct mtd_partition __initdata ek_nand_partition[] = {
-	{
-		.name	= "Partition 1",
-		.offset	= 0,
-		.size	= SZ_64M,
-	},
-	{
-		.name	= "Partition 2",
-		.offset	= MTDPART_OFS_NXTBLK,
-		.size	= MTDPART_SIZ_FULL,
-	},
+#ifdef CONFIG_BLK_DEV_INITRD
+    {
+        .name   = "Bootstrap",
+        .offset = 0,
+        .size   = 5 * 1024 * 1024,
+    },
+
+    {
+        .name	= "system",
+        .offset	= 5 * 1024 * 1024,
+        .size	= 95 * 1024 * 1024,
+    },
+
+    {  
+        .name   ="userdata",        /*for mtd@userdata*/
+        .offset = 100 * 1024 * 1024,
+        .size   = MTDPART_SIZ_FULL,
+               
+    },
+#else
+
+    {
+        .name   = "Bootstrap",
+        .offset = 0,
+        .size   = 5 * 1024 * 1024,
+    },
+
+    {
+        .name	= "ramdisk",
+        .offset	= 5 * 1024 * 1024,
+        .size	= 95 * 1024 * 1024,
+    },
+
+    {  
+        .name   ="userdata",        /*for mtd@userdata*/
+        .offset = 100 * 1024 * 1024,
+        .size   = 64 * 1024 * 1024,
+    },		
+	
+    {
+        .name	= "cache",	
+        .offset = 164 * 1024 * 1024, 
+        .size	= MTDPART_SIZ_FULL,
+
+    },
+#endif
 };
 
 static struct mtd_partition * __init nand_partitions(int size, int *num_partitions)
@@ -214,20 +256,7 @@ static struct isi_platform_data __initdata isi_data = {
 	.data_width_flags = ISI_DATAWIDTH_8 | ISI_DATAWIDTH_10,
 };
 
-static void __init isi_set_clk(void)
-{
-	struct clk *pck1;
-	struct clk *plla;
-
-	pck1 = clk_get(NULL, "pck1");
-	plla = clk_get(NULL, "plla");
-
-	clk_set_parent(pck1, plla);
-	clk_set_rate(pck1, 25000000);
-	clk_enable(pck1);
-}
 #else
-static void __init isi_set_clk(void) {}
 
 static struct isi_platform_data __initdata isi_data;
 #endif
@@ -327,7 +356,7 @@ static struct fb_monspecs at91fb_default_monspecs = {
 /* Driver datas */
 static struct atmel_lcdfb_info __initdata ek_lcdc_data = {
 	.lcdcon_is_backlight		= true,
-	.default_bpp			= 32,
+	.default_bpp			= 16,
 	.default_dmacon			= ATMEL_LCDC_DMAEN,
 	.default_lcdcon2		= AT91SAM9G45_DEFAULT_LCDCON2,
 	.default_monspecs		= &at91fb_default_monspecs,
@@ -344,9 +373,14 @@ static struct atmel_lcdfb_info __initdata ek_lcdc_data;
  * Touchscreen
  */
 static struct at91_tsadcc_data ek_tsadcc_data = {
+#if defined(CONFIG_MACH_AT91SAM9M10G45EK)
+	.adc_clock		= 800000,
+	.ts_sample_hold_time	= 0x04,
+#else
 	.adc_clock		= 300000,
-	.pendet_debounce	= 0x0d,
 	.ts_sample_hold_time	= 0x0a,
+#endif
+	.pendet_debounce	= 0x0d,
 };
 
 
@@ -356,14 +390,14 @@ static struct at91_tsadcc_data ek_tsadcc_data = {
 #if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
 static struct gpio_keys_button ek_buttons[] = {
 	{	/* BP1, "leftclic" */
-		.code		= BTN_LEFT,
+		.code		= KEY_BACK,
 		.gpio		= AT91_PIN_PB6,
 		.active_low	= 1,
 		.desc		= "left_click",
 		.wakeup		= 1,
 	},
 	{	/* BP2, "rightclic" */
-		.code		= BTN_RIGHT,
+		.code		= KEY_MENU,
 		.gpio		= AT91_PIN_PB7,
 		.active_low	= 1,
 		.desc		= "right_click",
@@ -480,6 +514,147 @@ static struct gpio_led ek_pwm_led[] = {
 #endif
 };
 
+/*
+  *  Android ADB
+  */
+static char *usb_functions_ums[] = {
+	"usb_mass_storage",
+};
+
+static char *usb_functions_ums_adb[] = {
+	"usb_mass_storage",
+	"adb",
+};
+
+static char *usb_functions_rndis[] = {
+	"rndis",
+};
+
+static char *usb_functions_rndis_adb[] = {
+	"rndis",
+	"adb",
+};
+
+#ifdef CONFIG_USB_ANDROID_DIAG
+static char *usb_functions_adb_diag[] = {
+	"usb_mass_storage",
+	"adb",
+	"diag",
+};
+#endif
+
+static char *usb_functions_all[] = {
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	"rndis",
+#endif
+	"usb_mass_storage",
+	"adb",
+#ifdef CONFIG_USB_ANDROID_ACM
+	"acm",
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
+	"diag",
+#endif
+};
+
+static struct android_usb_product usb_products[] = {
+	{
+		.product_id	= 0x6129,
+		.num_functions	= ARRAY_SIZE(usb_functions_ums),
+		.functions	= usb_functions_ums,
+	},
+	{
+		.product_id	= 0x6155,
+		.num_functions	= ARRAY_SIZE(usb_functions_ums_adb),
+		.functions	= usb_functions_ums_adb,
+	},
+	{
+		.product_id	= 0x6156,
+		.num_functions	= ARRAY_SIZE(usb_functions_rndis),
+		.functions	= usb_functions_rndis,
+	},
+	{
+		.product_id	= 0x6157,
+		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
+		.functions	= usb_functions_rndis_adb,
+	},
+#ifdef CONFIG_USB_ANDROID_DIAG
+	{
+		.product_id	= 0x6158,
+		.num_functions	= ARRAY_SIZE(usb_functions_adb_diag),
+		.functions	= usb_functions_adb_diag,
+	},
+#endif
+};
+
+static struct usb_mass_storage_platform_data mass_storage_pdata = {
+	.nluns		= 1,
+	.vendor		= "ATMEL",
+	.product	= "SAM9M10G45",
+	.release	= 0x0100,
+};
+
+static struct platform_device usb_mass_storage_device = {
+	.name	= "usb_mass_storage",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &mass_storage_pdata,
+	},
+};
+
+#ifdef CONFIG_USB_ANDROID_RNDIS
+static struct usb_ether_platform_data rndis_pdata = {
+	/* ethaddr is filled by board_serialno_setup */
+	.vendorID	= 0x03EB,
+	.vendorDescr	= "ATMEL",
+};
+
+static struct platform_device rndis_device = {
+	.name	= "rndis",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &rndis_pdata,
+	},
+};
+#endif
+
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x03EB,
+	.product_id	= 0x6129,
+	.version	= 0x0100,
+	.product_name		= "SAM9M10G45",
+	.manufacturer_name	= "ATMEL",
+	.num_products = ARRAY_SIZE(usb_products),
+	.products = usb_products,
+	.num_functions = ARRAY_SIZE(usb_functions_all),
+	.functions = usb_functions_all,
+};
+
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+
+static void __init at91_usb_adb_init(void){
+	platform_device_register(&android_usb_device);
+	platform_device_register(&usb_mass_storage_device);
+}
+
+/*
+ *  BATTERY
+ */
+static struct platform_device battery = {
+	.name = "dummy-battery",
+	.id   = -1,
+};
+
+static void __init at91_init_battery(void)
+{
+	platform_device_register(&battery);
+}
 
 
 static void __init ek_board_init(void)
@@ -504,7 +679,6 @@ static void __init ek_board_init(void)
 	at91_add_device_i2c(0, NULL, 0);
 	/* ISI */
 	platform_add_devices(devices, ARRAY_SIZE(devices));
-	isi_set_clk();
 	at91_add_device_isi(&isi_data);
 
 	/* LCD Controller */
@@ -518,9 +692,19 @@ static void __init ek_board_init(void)
 	/* LEDs */
 	at91_gpio_leds(ek_leds, ARRAY_SIZE(ek_leds));
 	at91_pwm_leds(ek_pwm_led, ARRAY_SIZE(ek_pwm_led));
+
+	at91_init_battery();
+	/*usb adb*/
+	at91_usb_adb_init();
 }
 
+#if defined(CONFIG_MACH_AT91SAM9G45EKES)
+MACHINE_START(AT91SAM9G45EKES, "Atmel AT91SAM9G45-EKES")
+#elif defined(CONFIG_MACH_AT91SAM9M10EKES)
+MACHINE_START(AT91SAM9M10EKES, "Atmel AT91SAM9M10-EKES")
+#else
 MACHINE_START(AT91SAM9M10G45EK, "Atmel AT91SAM9M10G45-EK")
+#endif
 	/* Maintainer: Atmel */
 	.boot_params	= AT91_SDRAM_BASE + 0x100,
 	.timer		= &at91sam926x_timer,

@@ -24,17 +24,16 @@
 
 #include <video/atmel_lcdfb.h>
 
+extern  unsigned int frame_update_done;
+extern  spinlock_t lock;
+extern  wait_queue_head_t wait;
+
 #define	ATMEL_LCDFB_FBINFO_DEFAULT	(FBINFO_DEFAULT \
 					 | FBINFO_PARTIAL_PAN_OK \
 					 | FBINFO_HWACCEL_YPAN)
 
 #define ATMEL_LCDC_CVAL_DEFAULT         0xc8
 
-struct atmel_hlcd_dma_desc {
-	u32	address;
-	u32	control;
-	u32	next;
-};
 
 static void atmel_hlcdfb_update_dma_base(struct fb_info *info,
 
@@ -57,6 +56,7 @@ static void atmel_hlcdfb_update_dma_base(struct fb_info *info,
 	/* Disable DMA transfer interrupt & descriptor loaded interrupt. */
 	desc->control = LCDC_BASECTRL_ADDIEN | LCDC_BASECTRL_DSCRIEN
 			| LCDC_BASECTRL_DMAIEN | LCDC_BASECTRL_DFETCH;
+	desc->control &= (~LCDC_BASECTRL_DMAIEN);     // Enable End of DMA transfer interrupt.    
 	desc->next = sinfo->dma_desc_phys;
 
 	lcdc_writel(sinfo, ATMEL_LCDC_BASEADDR, dma_addr);
@@ -312,9 +312,9 @@ static int atmel_hlcdfb_setup_core_base(struct fb_info *info)
 	lcdc_writel(sinfo, ATMEL_LCDC_LCDIDR, ~0UL);
 	lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
 	/* Enable BASE LAYER overflow interrupts, if want to enable DMA interrupt, also need set it at LCDC_BASECTRL reg */
-	lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR);
+	lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR | LCDC_BASEISR_DMA );
 	//FIXME: Let video-driver register a callback
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE |
+	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_BASEISR_DMA | LCDC_LCDIER_FIFOERRIE |
 				LCDC_LCDIER_BASEIE | LCDC_LCDIER_HEOIE);
 
 	return 0;
@@ -376,6 +376,7 @@ static irqreturn_t atmel_hlcdfb_interrupt(int irq, void *dev_id)
 	struct fb_info *info = dev_id;
 	struct atmel_lcdfb_info *sinfo = info->par;
 	u32 status, baselayer_status;
+	unsigned long irq_saved;
 
 	/* Check for error status via interrupt.*/
 	status = lcdc_readl(sinfo, ATMEL_LCDC_LCDISR);
@@ -392,6 +393,13 @@ static irqreturn_t atmel_hlcdfb_interrupt(int irq, void *dev_id)
 		if (baselayer_status & LCDC_BASEISR_OVR)
 			dev_warn(info->device, "base layer overflow %#x\n",
 						baselayer_status);
+		else if  (baselayer_status & LCDC_BASEISR_DMA){
+			spin_lock_irqsave(&lock, irq_saved);
+			frame_update_done = 1;
+			wake_up(&wait);
+			spin_unlock_irqrestore(&lock, irq_saved);		
+		}
+              
 	}
 
 	return IRQ_HANDLED;
@@ -399,25 +407,30 @@ static irqreturn_t atmel_hlcdfb_interrupt(int irq, void *dev_id)
 
 
 #ifdef CONFIG_PM
-
 static int atmel_hlcdfb_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
 	struct fb_info *info = platform_get_drvdata(pdev);
 	struct atmel_lcdfb_info *sinfo = info->par;
 
-	/*
-	 * We don't want to handle interrupts while the clock is
-	 * stopped. It may take forever.
-	 */
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDIDR, ~0UL);
-	lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
+	// Only atmel_hlcdfb_base can suspend and resume
+	if (!strcmp(pdev->name, "atmel_hlcdfb_base")) {
+		/* Disabel  DMA */
+		lcdc_writel(sinfo, ATMEL_LCDC_BASECHDR, LCDC_BASECHDR_CHDIS);
+		
+		/*
+		 * We don't want to handle interrupts while the clock is
+		 * stopped. It may take forever.
+		 */
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDIDR, ~0UL);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASEIDR, ~0UL);
 
-	if (sinfo->atmel_lcdfb_power_control)
-		sinfo->atmel_lcdfb_power_control(0);
+		if (sinfo->atmel_lcdfb_power_control)
+			sinfo->atmel_lcdfb_power_control(0);
 
-	atmel_hlcdfb_stop(sinfo, 0);
-	atmel_lcdfb_stop_clock(sinfo);
-
+		atmel_hlcdfb_stop(sinfo, 0);
+		atmel_lcdfb_stop_clock(sinfo);
+	}
+	
 	return 0;
 }
 
@@ -426,16 +439,20 @@ static int atmel_hlcdfb_resume(struct platform_device *pdev)
 	struct fb_info *info = platform_get_drvdata(pdev);
 	struct atmel_lcdfb_info *sinfo = info->par;
 
-	atmel_lcdfb_start_clock(sinfo);
-	atmel_hlcdfb_start(sinfo);
-	if (sinfo->atmel_lcdfb_power_control)
-		sinfo->atmel_lcdfb_power_control(1);
+	// Only atmel_hlcdfb_base can suspend and resume
+	if (!strcmp(pdev->name, "atmel_hlcdfb_base")) {
+		atmel_lcdfb_start_clock(sinfo);
+		atmel_hlcdfb_start(sinfo);
+		if (sinfo->atmel_lcdfb_power_control)
+			sinfo->atmel_lcdfb_power_control(1);
 
-	/* Enable fifo error & BASE LAYER overflow interrupts */
-	lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR);
-	lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE |
-				LCDC_LCDIER_BASEIE | LCDC_LCDIER_HEOIE);
-
+		/* Enable fifo error & BASE LAYER overflow interrupts */
+		lcdc_writel(sinfo, ATMEL_LCDC_BASEIER, LCDC_BASEIER_OVR | LCDC_BASEIER_DMA);
+		lcdc_writel(sinfo, ATMEL_LCDC_LCDIER, LCDC_LCDIER_FIFOERRIE |
+					LCDC_LCDIER_BASEIE | LCDC_LCDIER_HEOIE);
+		lcdc_writel(sinfo, ATMEL_LCDC_BASECHER, LCDC_BASECHER_CHEN);
+	}
+	
 	return 0;
 }
 

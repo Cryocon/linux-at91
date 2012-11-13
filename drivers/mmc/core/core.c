@@ -73,7 +73,10 @@ MODULE_PARM_DESC(
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
-	wake_lock(&mmc_delayed_work_wake_lock);
+	/* wake_lock(&mmc_delayed_work_wake_lock); */
+	/* sometimes, this lock don't be unlocked when inserting two sdcards */
+	wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
+
 	return queue_delayed_work(workqueue, work, delay);
 }
 

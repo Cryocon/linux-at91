@@ -41,6 +41,14 @@
 
 #include "ac97c.h"
 
+/*
+  * Add by embest
+  * Reason: 
+  *   we define ANDROID_OS because android need playback audio at 44.1K HZ and record audio at 8K HZ.
+  *   So runtime->hw.rate_min and runtime->hw.rate_max should be difference
+  */
+#define ANDROID_OS
+
 enum {
 	DMA_TX_READY = 0,
 	DMA_RX_READY,
@@ -162,9 +170,32 @@ static struct snd_pcm_hardware atmel_ac97c_hw = {
 	.channels_min		= 1,
 	.channels_max		= 2,
 	.buffer_bytes_max	= 2 * 2 * 64 * 2048,
-	.period_bytes_min	= 4096,
+/* Add by embest
+  * Problem:
+  *   When use stagefright to paly video, A/V could not sync! video will sync to the audio clock. 
+  *   The rang is [-1000, 4000]
+  * Reason:
+  *   About audio playback in stagefright, the mode is: there is a shared buffer, stagefright will decode the audio<like AAC>
+  *    to raw, then stagefright will write the raw data to shared buffer. AudioFlinger will get data from the shared buffer and pass
+  *    it to driver to playback the audio. Stagefright will decode the audio constantly until shared buffer is filled with raw data, then
+  *    stagefright will wait until the shared buffer is empty by AudioFlinger.
+  *   So, the shared buffer size will determine the granularity of audio clock.
+  *   The shared buffer size is relate to "period_bytes_min", when period_bytes_min = 4096, the shared buffer size is about 32768
+  *    and the granularity of audio clock is about  4*videoframe = 160ms
+  * Solution:
+  *   Change period_bytes_min from 4096 to 512, so audio clock granularity will be 160ms/8 = 20ms. This is ok for av sync
+  * Limitations:
+  *   Follow data is got from log message, maybe incompatible
+  *   1. one audio frame size is 2(channel count) * 4096 (one channel data size) = 8192
+  *   2. shared buffer size is period_bytes_min*2 * 4. I know *4 is from stagefright<audioplayer.cpp>, but i don't know why period_bytes_min
+  *       will *2 by kernel.
+  *   3. application<alsa_default.cpp> should be able to select the shared buffer size from "period_bytes_min" to "buffer_bytes_max". But from
+  *       our test, application could not select, it is fix to period_bytes_min*2, the reason is unknow.
+  *
+  */
+	.period_bytes_min	= 512,
 	.period_bytes_max	= 4096,
-	.periods_min		= 6,
+	.periods_min		= 8,
 	.periods_max		= 64,
 };
 
@@ -176,10 +207,12 @@ static int atmel_ac97c_playback_open(struct snd_pcm_substream *substream)
 	mutex_lock(&opened_mutex);
 	chip->opened++;
 	runtime->hw = atmel_ac97c_hw;
+#ifndef ANDROID_OS    
 	if (chip->cur_rate) {
 		runtime->hw.rate_min = chip->cur_rate;
 		runtime->hw.rate_max = chip->cur_rate;
 	}
+#endif    
 	if (chip->cur_format)
 		runtime->hw.formats = (1ULL << chip->cur_format);
 	mutex_unlock(&opened_mutex);
@@ -195,10 +228,12 @@ static int atmel_ac97c_capture_open(struct snd_pcm_substream *substream)
 	mutex_lock(&opened_mutex);
 	chip->opened++;
 	runtime->hw = atmel_ac97c_hw;
+#ifndef ANDROID_OS    
 	if (chip->cur_rate) {
 		runtime->hw.rate_min = chip->cur_rate;
 		runtime->hw.rate_max = chip->cur_rate;
 	}
+#endif    
 	if (chip->cur_format)
 		runtime->hw.formats = (1ULL << chip->cur_format);
 	mutex_unlock(&opened_mutex);
@@ -505,6 +540,7 @@ atmel_ac97c_playback_trigger(struct snd_pcm_substream *substream, int cmd)
 	int retval = 0;
 
 	camr = ac97c_readl(chip, CAMR);
+	ptcr = readl(chip->regs + ATMEL_PDC_PTSR);
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE: /* fall through */
@@ -899,6 +935,10 @@ static void atmel_ac97c_reset(struct atmel_ac97c *chip)
 		/* AC97 v2.2 specifications says minimum 1 us. */
 		udelay(2);
 		gpio_set_value(chip->reset_pin, 1);
+	} else {
+		ac97c_writel(chip, MR, AC97C_MR_WRST | AC97C_MR_ENA);
+		udelay(2);
+		ac97c_writel(chip, MR, AC97C_MR_ENA);
 	}
 }
 

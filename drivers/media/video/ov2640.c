@@ -606,7 +606,8 @@ static const struct regval_list ov2640_rgb565_regs[] = {
 
 static enum v4l2_mbus_pixelcode ov2640_codes[] = {
 	V4L2_MBUS_FMT_UYVY8_2X8,
-	V4L2_MBUS_FMT_RGB565_2X8_LE,
+	/* Remove by embest, we find that RGB565 could not work fine */
+	/* V4L2_MBUS_FMT_RGB565_2X8_LE, */
 };
 
 /*

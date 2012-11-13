@@ -154,7 +154,26 @@ from_old_alarm_set:
 		}
 		rv = alarm_set_rtc(new_rtc_time);
 		spin_lock_irqsave(&alarm_slock, flags);
-		alarm_pending |= ANDROID_ALARM_TIME_CHANGE_MASK;
+/* Add by embest
+  * Problem:
+  *    If we plug out the battery from the board and power down the board totally.In this case the RTC will reset to 0
+  *    Then we power up the board,Android will report a error and reboot the system
+  *    The error is: 
+  *          Attempt to launch receivers of broadcast intent Intent XXX before boot completion
+  *          *** FATAL EXCEPTION IN SYSTEM PROCESS: AlarmManager
+  *          at com.android.server.AlarmManagerService$AlarmThread.run(AlarmManagerService.java:657)
+  * Reason:
+  *    In AlarmManagerService.java -> AlarmThread.run, it will send a intent if "TIME_CHANGED_MASK" is set in RTC module
+  *    TIME_CHANGED_MASK = 1 << 16 = ANDROID_ALARM_TIME_CHANGE_MASK
+  *    And in SystemServer.java -> main, it will check and set RTC >= 1970,if this happen, ANDROID_ALARM_TIME_CHANGE_MASK will be set
+  * Solution:
+  *    1970 is equal to 86400 in long type.
+  *    so if we find the set time is <= 86400, we will not set ANDROID_ALARM_TIME_CHANGE_MASK flag
+  */
+              if(new_rtc_time.tv_sec > 86400)
+                  alarm_pending |= ANDROID_ALARM_TIME_CHANGE_MASK;
+              else
+                  printk(KERN_ERR "ANDROID_ALARM_SET_RTC : %ld ",new_rtc_time.tv_sec);
 		wake_up(&alarm_wait_queue);
 		spin_unlock_irqrestore(&alarm_slock, flags);
 		if (rv < 0)

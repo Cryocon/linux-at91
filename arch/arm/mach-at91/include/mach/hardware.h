@@ -26,7 +26,7 @@
 #include <mach/at91sam9263.h>
 #elif defined(CONFIG_ARCH_AT91SAM9RL)
 #include <mach/at91sam9rl.h>
-#elif defined(CONFIG_ARCH_AT91SAM9G45)
+#elif defined(CONFIG_ARCH_AT91SAM9G45) ||  defined(CONFIG_ARCH_AT91SAM9M10)
 #include <mach/at91sam9g45.h>
 #elif defined(CONFIG_ARCH_AT91SAM9X5)
 #include <mach/at91sam9x5.h>

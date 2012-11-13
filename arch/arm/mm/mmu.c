@@ -852,6 +852,9 @@ static void __init sanity_check_meminfo(void)
 			bank->size = newsize;
 		}
 #endif
+		if (!bank->highmem && bank->start + bank->size > lowmem_limit)
+			lowmem_limit = bank->start + bank->size;
+
 		j++;
 	}
 #ifdef CONFIG_HIGHMEM

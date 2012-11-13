@@ -23,6 +23,10 @@
 
 #include <video/atmel_lcdfb.h>
 
+extern  unsigned int frame_update_done;
+extern  spinlock_t lock;
+extern  wait_queue_head_t wait;
+
 /* configurable parameters */
 #define ATMEL_LCDC_CVAL_DEFAULT		0xc8
 #define ATMEL_LCDC_DMA_BURST_LEN	8	/* words */
@@ -298,7 +302,7 @@ static int atmel_lcdfb_setup_core(struct fb_info *info)
 	/* Disable all interrupts */
 	lcdc_writel(sinfo, ATMEL_LCDC_IDR, ~0UL);
 	/* Enable FIFO & DMA errors */
-	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI | ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
+	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_EOFI | ATMEL_LCDC_UFLWI | ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
 
 	/* ...wait for DMA engine to become idle... */
 	while (lcdc_readl(sinfo, ATMEL_LCDC_DMACON) & ATMEL_LCDC_DMABUSY)
@@ -329,13 +333,19 @@ static irqreturn_t atmel_lcdfb_interrupt(int irq, void *dev_id)
 	struct fb_info *info = dev_id;
 	struct atmel_lcdfb_info *sinfo = info->par;
 	u32 status;
+	unsigned long irq_saved;
 
 	status = lcdc_readl(sinfo, ATMEL_LCDC_ISR);
 	if (status & ATMEL_LCDC_UFLWI) {
 		dev_warn(info->device, "FIFO underflow %#x\n", status);
 		/* reset DMA and FIFO to avoid screen shifting */
 		schedule_work(&sinfo->task);
-	}
+	}else if (status & ATMEL_LCDC_EOFI) {
+		spin_lock_irqsave(&lock, irq_saved);
+		frame_update_done = 1;
+		wake_up(&wait);
+		spin_unlock_irqrestore(&lock, irq_saved);
+	}	
 	lcdc_writel(sinfo, ATMEL_LCDC_ICR, status);
 	return IRQ_HANDLED;
 }
@@ -378,8 +388,8 @@ static int atmel_lcdfb_resume(struct platform_device *pdev)
 	lcdc_writel(sinfo, ATMEL_LCDC_CONTRAST_CTR, sinfo->saved_lcdcon);
 
 	/* Enable FIFO & DMA errors */
-	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_UFLWI
-			| ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
+	lcdc_writel(sinfo, ATMEL_LCDC_IER, ATMEL_LCDC_EOFI | ATMEL_LCDC_UFLWI
+ 				| ATMEL_LCDC_OWRI | ATMEL_LCDC_MERI);
 
 	return 0;
 }

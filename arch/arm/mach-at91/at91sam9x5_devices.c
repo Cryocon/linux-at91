@@ -295,6 +295,12 @@ void __init at91_add_device_usba(struct usba_platform_data *data)
 	if (data && data->vbus_pin > 0) {
 		at91_set_gpio_input(data->vbus_pin, 0);
 		at91_set_deglitch(data->vbus_pin, 1);
+              /***
+                * Add by embest
+                * We need to disable the power for usb host, so that we could detect usb calbe plug in or plug out
+                * The problem is cause that usb host and usb device share a gpio pin(PD18)
+                */
+              at91_set_gpio_output(AT91_PIN_PD18, 1);
 		usba_udc_data.pdata.vbus_pin = data->vbus_pin;
 	}
 

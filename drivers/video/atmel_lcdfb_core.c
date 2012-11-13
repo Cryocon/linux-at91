@@ -24,8 +24,50 @@
 
 #include <video/atmel_lcdfb.h>
 
+#define ANDROID_OS
+
 /* configurable parameters */
 #define ATMEL_LCDC_CVAL_DEFAULT		0xc8
+
+#ifdef ANDROID_OS
+struct fb_var_screeninfo cached_fb_var;
+int is_fb_var_cached = 0;
+unsigned int frame_update_done;
+spinlock_t lock;
+wait_queue_head_t wait;
+
+
+static int lcdc_is_fb_changed(struct fb_info *info)
+{
+    if (!is_fb_var_cached ||
+        info->var.xres != cached_fb_var.xres ||
+        info->var.yres != cached_fb_var.yres ||
+        info->var.xres_virtual != cached_fb_var.xres_virtual ||
+        info->var.yres_virtual != cached_fb_var.yres_virtual ||
+        info->var.bits_per_pixel != cached_fb_var.bits_per_pixel ||
+        info->var.grayscale != cached_fb_var.grayscale ||
+        info->var.green.length != cached_fb_var.green.length ||
+        info->var.left_margin != cached_fb_var.left_margin ||
+        info->var.right_margin != cached_fb_var.right_margin ||
+        info->var.upper_margin != cached_fb_var.upper_margin ||
+        info->var.lower_margin != cached_fb_var.lower_margin ||
+        info->var.hsync_len != cached_fb_var.hsync_len ||
+        info->var.vsync_len != cached_fb_var.vsync_len ||
+        info->var.sync != cached_fb_var.sync ||
+        info->var.rotate != cached_fb_var.rotate) {
+        cached_fb_var = info->var;
+
+        is_fb_var_cached = 1;
+        return 1;
+
+    }
+
+    else
+
+        return 0;
+
+}
+#endif
 
 #ifdef CONFIG_BACKLIGHT_ATMEL_LCDC
 
@@ -108,7 +150,6 @@ static int atmel_lcdfb_alloc_video_memory(struct atmel_lcdfb_info *sinfo)
 	struct fb_info *info = sinfo->info;
 	struct fb_var_screeninfo *var = &info->var;
 	unsigned int smem_len;
-
 	smem_len = (var->xres_virtual * var->yres_virtual
 		    * ((var->bits_per_pixel + 7) / 8));
 	info->fix.smem_len = max(smem_len, sinfo->smem_len);
@@ -212,12 +253,17 @@ static int atmel_lcdfb_check_var(struct fb_var_screeninfo *var,
 	/* Force same alignment for each line */
 	var->xres = (var->xres + 3) & ~3UL;
 	var->xres_virtual = (var->xres_virtual + 3) & ~3UL;
+    
+#ifdef ANDROID_OS
+    var->yres_virtual = max(var->yres_virtual ,var->yres * 2);
+#endif
 
 	var->red.msb_right = var->green.msb_right = var->blue.msb_right = 0;
 	var->transp.msb_right = 0;
 	var->transp.offset = var->transp.length = 0;
+#ifndef ANDROID_OS    
 	var->xoffset = var->yoffset = 0;
-
+#endif
 	if (info->fix.smem_len) {
 		unsigned int smem_len = (var->xres_virtual * var->yres_virtual
 					 * ((var->bits_per_pixel + 7) / 8));
@@ -330,6 +376,11 @@ static int atmel_lcdfb_set_par(struct fb_info *info)
 	dev_dbg(info->device, "  * resolution: %ux%u (%ux%u virtual)\n",
 		 info->var.xres, info->var.yres,
 		 info->var.xres_virtual, info->var.yres_virtual);
+
+#ifdef ANDROID_OS
+    if(!lcdc_is_fb_changed(info))
+		return 0 ;
+#endif
 
 	if (sinfo->dev_data->stop)
 		sinfo->dev_data->stop(sinfo, ATMEL_LCDC_STOP_NOWAIT);
@@ -452,8 +503,38 @@ static int atmel_lcdfb_pan_display(struct fb_var_screeninfo *var,
 	struct atmel_lcdfb_info *sinfo = info->par;
 
 	dev_dbg(info->device, "%s\n", __func__);
+#ifdef ANDROID_OS
+	unsigned long irq_saved;
+	struct fb_fix_screeninfo *fix = &info->fix;
+	unsigned long dma_addr;
+	struct atmel_hlcd_dma_desc *desc;
 
+	dma_addr = (fix->smem_start + var->yoffset * fix->line_length
+			+ var->xoffset * var->bits_per_pixel / 8);
+
+	dma_addr &= ~3UL;
+
+	if (cpu_is_at91sam9x5()) {
+	    /* Update the DMA descriptor, this descriptor will change if the pan display was called */
+	    desc = (struct atmel_hlcd_dma_desc *)sinfo->dma_desc;
+	    desc->address = dma_addr;
+	    desc->next = sinfo->dma_desc_phys;
+	}else{
+	    sinfo->dev_data->update_dma(info, var);
+       }
+
+ 	spin_lock_irqsave(&lock, irq_saved);
+	frame_update_done = 0;
+	spin_unlock_irqrestore(&lock, irq_saved);
+
+	// 24 frame per second is the lowest limit of the human eye, (1000/24)ms is the maximum delay time
+	wait_event_timeout(wait, frame_update_done != 0, msecs_to_jiffies(1000 / 24));
+	if (frame_update_done == 0)
+		dev_dbg(info->device, "... ops, no vsync detected? ...\n");      
+
+#else
 	sinfo->dev_data->update_dma(info, var);
+#endif
 
 	return 0;
 }
@@ -558,6 +639,9 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 
 	dev_dbg(dev, "%s BEGIN\n", __func__);
 
+	spin_lock_init(&lock);
+	init_waitqueue_head(&wait);
+    
 	ret = -ENOMEM;
 	info = framebuffer_alloc(sizeof(struct atmel_lcdfb_info), dev);
 	if (!info) {
@@ -673,6 +757,7 @@ int __atmel_lcdfb_probe(struct platform_device *pdev,
 
 	if (!request_mem_region(info->fix.mmio_start,
 				info->fix.mmio_len, pdev->name)) {
+		dev_err(dev, "cannot request_mem_region for mmio\n");		
 		ret = -EBUSY;
 		goto free_fb;
 	}

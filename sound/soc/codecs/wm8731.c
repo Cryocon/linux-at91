@@ -58,7 +58,7 @@ struct wm8731_priv {
  */
 static const u16 wm8731_reg[WM8731_CACHEREGNUM] = {
 	0x0097, 0x0097, 0x0079, 0x0079,
-	0x000a, 0x0008, 0x009f, 0x000a,
+	0x001a, 0x0008, 0x009f, 0x000a, 
 	0x0000, 0x0000
 };
 
@@ -471,7 +471,11 @@ static int wm8731_set_bias_level(struct snd_soc_codec *codec,
 		snd_soc_write(codec, WM8731_PWR, reg | 0x0040);
 		break;
 	case SND_SOC_BIAS_OFF:
-		snd_soc_write(codec, WM8731_PWR, 0xffff);
+		snd_soc_write(codec, WM8731_ACTIVE, 0x0);
+		/* standby: keep crystal oscillator enabled */
+		snd_soc_write(codec, WM8731_PWR, 0x00df);
+		/* standby: keep crystal oscillator enabled */
+		snd_soc_write(codec, WM8731_PWR, 0x00df);
 		regulator_bulk_disable(ARRAY_SIZE(wm8731->supplies),
 				       wm8731->supplies);
 		break;
@@ -507,7 +511,11 @@ static struct snd_soc_dai_driver wm8731_dai = {
 		.rates = WM8731_RATES,
 		.formats = WM8731_FORMATS,},
 	.ops = &wm8731_dai_ops,
-	.symmetric_rates = 1,
+    /**
+	 * We should not use this feature,otherwish capture and record will use the same rate!
+	 * See soc_pcm_apply_symmetry in soc-core.c
+	 */
+    /*	.symmetric_rates = 1,  */
 };
 
 #ifdef CONFIG_PM

@@ -37,6 +37,7 @@
 #define ATMEL_LCDC_STOP_NOWAIT (1 << 0)
 
 struct atmel_lcdfb_info;
+struct atmel_hlcd_dma_desc;
 
 struct atmel_lcdfb_devdata {
 	int (*setup_core)(struct fb_info *info);
@@ -92,6 +93,12 @@ struct atmel_lcdfb_info {
 	void (*atmel_lcdfb_power_control)(int on);
 	struct fb_monspecs	*default_monspecs;
 	u32			pseudo_palette[16];
+};
+
+ struct atmel_hlcd_dma_desc {
+	u32	address;
+	u32	control;
+	u32	next;
 };
 
 #define lcdc_readl(sinfo, reg)		__raw_readl((sinfo)->mmio+(reg))

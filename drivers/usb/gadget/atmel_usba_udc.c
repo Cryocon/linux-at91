@@ -25,8 +25,9 @@
 #include <asm/gpio.h>
 #include <mach/board.h>
 
+#include <linux/wakelock.h>
 #include "atmel_usba_udc.h"
-
+#define ANDROID_OS
 
 static struct usba_udc the_udc;
 static struct usba_ep *usba_ep;
@@ -1007,10 +1008,43 @@ usba_udc_set_selfpowered(struct usb_gadget *gadget, int is_selfpowered)
 	return 0;
 }
 
+#ifdef ANDROID_OS
+static int udc_pullup(struct usba_udc *udc,int is_on)
+{
+	unsigned long flags;
+	u32 ctrl;
+	int ret = -EINVAL;
+	u32 value;
+
+	spin_lock_irqsave(&udc->lock, flags);
+	ctrl = usba_readl(udc, CTRL);
+	ctrl = ctrl & (~USBA_DETACH);
+	if(is_on){
+		value = USBA_ENABLE_MASK;
+	}else{
+		value = USBA_DISABLE_MASK;
+	}
+	usba_writel(udc, CTRL, ctrl | value);
+	ret = 0;
+	spin_unlock_irqrestore(&udc->lock, flags);
+
+	return ret;
+}
+static int usba_udc_pullup(struct usb_gadget *gadget,int is_on)
+{
+	struct usba_udc *udc = to_usba_udc(gadget);
+	
+	return udc_pullup(udc,is_on);
+}
+#endif
+
 static const struct usb_gadget_ops usba_udc_ops = {
 	.get_frame		= usba_udc_get_frame,
 	.wakeup			= usba_udc_wakeup,
 	.set_selfpowered	= usba_udc_set_selfpowered,
+#ifdef ANDROID_OS
+	.pullup			= usba_udc_pullup,
+#endif
 };
 
 static struct usb_endpoint_descriptor usba_ep0_desc = {
@@ -1766,6 +1800,8 @@ static irqreturn_t usba_vbus_irq(int irq, void *devid)
 	vbus = vbus_is_present(udc);
 	if (vbus != udc->vbus_prev) {
 		if (vbus) {
+			/* The kernel can't enter into suspend when USB is inserting */
+			wake_lock(&udc->wake_lock);
 			toggle_bias(1);
 			usba_writel(udc, CTRL, USBA_ENABLE_MASK);
 			usba_writel(udc, INT_ENB, USBA_END_OF_RESET);
@@ -1779,6 +1815,9 @@ static irqreturn_t usba_vbus_irq(int irq, void *devid)
 				udc->driver->disconnect(&udc->gadget);
 				spin_lock(&udc->lock);
 			}
+
+			/*The kernel can enter into suspend */
+			wake_unlock(&udc->wake_lock);
 		}
 		udc->vbus_prev = vbus;
 	}
@@ -1832,6 +1871,10 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver,
 		toggle_bias(1);
 		usba_writel(udc, CTRL, USBA_ENABLE_MASK);
 		usba_writel(udc, INT_ENB, USBA_END_OF_RESET);
+
+		wake_lock(&udc->wake_lock);
+		/* the vbus status should be changed */
+		udc->vbus_prev = 1;
 	}
 	spin_unlock_irqrestore(&udc->lock, flags);
 
@@ -1869,6 +1912,9 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	if (udc->driver->disconnect)
 		udc->driver->disconnect(&udc->gadget);
 
+	if (udc->vbus_prev == 1)
+		wake_unlock(&udc->wake_lock);
+	
 	driver->unbind(&udc->gadget);
 	udc->gadget.dev.driver = NULL;
 	udc->driver = NULL;
@@ -1984,6 +2030,9 @@ static int __init usba_udc_probe(struct platform_device *pdev)
 		list_add_tail(&ep->ep.ep_list, &udc->gadget.ep_list);
 	}
 
+	wake_lock_init(&udc->wake_lock, WAKE_LOCK_SUSPEND,
+			   "atmel_usba_udc");
+	
 	ret = request_irq(irq, usba_udc_irq, 0, "atmel_usba_udc", udc);
 	if (ret) {
 		dev_err(&pdev->dev, "Cannot request irq %d (error %d)\n",
@@ -2030,6 +2079,7 @@ static int __init usba_udc_probe(struct platform_device *pdev)
 err_device_add:
 	free_irq(irq, udc);
 err_request_irq:
+	wake_lock_destroy(&udc->wake_lock);
 	kfree(usba_ep);
 err_alloc_ep:
 	iounmap(udc->fifo);
@@ -2074,8 +2124,37 @@ static int __exit usba_udc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int atmel_usba_udc_suspend(struct platform_device *pdev, pm_message_t mesg)
+{
+	struct usba_udc *udc = platform_get_drvdata(pdev);
+	return udc_pullup(udc, 0);
+	
+}
+
+static int atmel_usba_udc_resume(struct platform_device *pdev)
+{
+	struct usba_udc *udc = platform_get_drvdata(pdev);
+	printk(KERN_ERR "at91udc_resume enter\n");
+	udc_pullup(udc, 1);
+
+	/* recheck the status of USB */
+	if (vbus_is_present(udc) && udc->vbus_prev == 0) {
+		wake_lock(&udc->wake_lock);
+		udc->vbus_prev = 1;
+	}
+	
+	return 0;
+}
+#else
+#define	atmel_usba_udc_suspend	NULL
+#define	atmel_usba_udc_resume	NULL
+#endif
+
 static struct platform_driver udc_driver = {
 	.remove		= __exit_p(usba_udc_remove),
+	.suspend	= atmel_usba_udc_suspend,
+	.resume		= atmel_usba_udc_resume,
 	.driver		= {
 		.name		= "atmel_usba_udc",
 		.owner		= THIS_MODULE,

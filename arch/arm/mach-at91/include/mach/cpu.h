@@ -133,7 +133,7 @@ static inline unsigned long at91cap9_rev_identify(void)
 #define cpu_is_at91sam9rl()	(0)
 #endif
 
-#ifdef CONFIG_ARCH_AT91SAM9G45
+#if defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9M10)
 #define cpu_is_at91sam9g45()	(at91_cpu_identify() == ARCH_ID_AT91SAM9G45)
 #define cpu_is_at91sam9g45es()	(at91_cpu_fully_identify() == ARCH_ID_AT91SAM9G45ES)
 #define cpu_is_at91sam9m10()    (cpu_is_at91sam9g45() && \

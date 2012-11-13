@@ -335,6 +335,8 @@ static void at91sam9x5_reset(void)
 
 static void at91sam9x5_poweroff(void)
 {
+	at91_sys_read(AT91_SHDW_SR);
+	at91_sys_write(AT91_SHDW_MR, AT91_SHDW_WKMODE0_ANYLEVEL);
 	at91_sys_write(AT91_SHDW_CR, AT91_SHDW_KEY | AT91_SHDW_SHDW);
 }
 

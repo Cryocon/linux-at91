@@ -326,6 +326,8 @@ void mmc_remove_card(struct mmc_card *card)
 				mmc_hostname(card->host), card->rca);
 		}
 		device_del(&card->dev);
+		/* clear present state */
+		card->state &= (~MMC_STATE_PRESENT);
 	}
 
 	put_device(&card->dev);

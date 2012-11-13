@@ -42,7 +42,7 @@ static inline u32 sdram_selfrefresh_enable(void)
 #define sdram_selfrefresh_disable(saved_lpr)	at91_ramc_write(0, AT91_DDRSDRC_LPR, saved_lpr)
 #define wait_for_interrupt_enable()		cpu_do_idle()
 
-#elif defined(CONFIG_ARCH_AT91SAM9G45)
+#elif defined(CONFIG_ARCH_AT91SAM9G45) || defined(CONFIG_ARCH_AT91SAM9M10)
 #include <mach/at91sam9_ddrsdr.h>
 
 /* We manage both DDRAM/SDRAM controllers, we need more than one value to

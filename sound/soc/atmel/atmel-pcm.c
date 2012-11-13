@@ -56,7 +56,7 @@
 /* TODO: These values were taken from the AT91 platform driver, check
  *	 them against real values for AT32
  */
-static const struct snd_pcm_hardware atmel_pcm_pdc_hardware = {
+static struct snd_pcm_hardware atmel_pcm_pdc_hardware = {
 	.info			= SNDRV_PCM_INFO_MMAP |
 				  SNDRV_PCM_INFO_MMAP_VALID |
 				  SNDRV_PCM_INFO_INTERLEAVED |
@@ -69,7 +69,7 @@ static const struct snd_pcm_hardware atmel_pcm_pdc_hardware = {
 	.buffer_bytes_max	= 32 * 1024,
 };
 
-static const struct snd_pcm_hardware atmel_pcm_dma_hardware = {
+static struct snd_pcm_hardware atmel_pcm_dma_hardware = {
 	.info			= SNDRV_PCM_INFO_MMAP |
 				  SNDRV_PCM_INFO_MMAP_VALID |
 				  SNDRV_PCM_INFO_INTERLEAVED |

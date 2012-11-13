@@ -62,7 +62,7 @@
 
 /* AT42QT1070 support up to 7 keys */
 static const unsigned short qt1070_key2code[] = {
-	KEY_0, KEY_1, KEY_2, KEY_3,
+	KEY_BACK, KEY_HOME, KEY_MENU, KEY_POWER,
 	KEY_4, KEY_5, KEY_6,
 };
 
@@ -253,9 +253,6 @@ static int qt1070_suspend(struct device *dev)
 		enable_irq_wake(client->irq);
 	}
 
-	data->power_mode = qt1070_read(client, LP_MODE);
-	qt1070_write(client, LP_MODE, LP_MODE_LOW);
-
 	return 0;
 }
 
@@ -276,9 +273,6 @@ static int qt1070_resume(struct device *dev)
 	new_keys = qt1070_read(client, KEY_STATUS);
 
 	qt1070_report_key_pressed(data, new_keys);
-
-	/* Restore power mode */
-	qt1070_write(client, LP_MODE, data->power_mode);
 
 	/* Drain remaining status */
 	while (qt1070_read(client, DET_STATUS) & DET_STATUS_TOUCH)

@@ -26,13 +26,22 @@
 #include <media/soc_camera.h>
 #include <media/soc_mediabus.h>
 #include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-memops.h>
 
 #define MAX_BUFFER_NUM			32
 #define MAX_SUPPORT_WIDTH		2048
 #define MAX_SUPPORT_HEIGHT		2048
-#define VID_LIMIT_BYTES			(16 * 1024 * 1024)
+#define VID_LIMIT_BYTES			(4 * 1024 * 1024)
 #define MIN_FRAME_RATE			15
 #define FRAME_INTERVAL_MILLI_SEC	(1000 / MIN_FRAME_RATE)
+
+/* Add by embest
+  * Allocate dma buf for video buf
+  * We allocate it before android bootup because after android bootup, allocate will failed as OUT OF MEMORY*/
+#define ANDROID
+
+/* Use preview path OR codec path */
+bool use_preview_path;
 
 /* ISI states */
 enum {
@@ -40,6 +49,54 @@ enum {
 	ISI_STATE_READY,
 	ISI_STATE_WAIT_SOF,
 };
+
+#ifdef ANDROID
+
+static unsigned long offset = 0;
+struct vb2_vmarea_handler	mmap_handler;
+
+#define call_memop(q, plane, op, args...)				\
+	(((q)->mem_ops->op) ?						\
+		((q)->mem_ops->op(args)) : 0)
+
+struct vb2_dc_conf {
+	struct device		*dev;
+};
+
+
+struct vb2_dc_buf {
+	struct vb2_dc_conf		*conf;
+	void				*vaddr;
+	dma_addr_t			paddr;
+	unsigned long			size;
+	struct vm_area_struct		*vma;
+	atomic_t			refcount;
+	struct vb2_vmarea_handler	handler;
+};
+
+static void vb2_dma_contig_put(void *buf_priv)
+{
+	struct vb2_dc_buf *buf = buf_priv;
+
+	if (atomic_dec_and_test(&buf->refcount)) {
+		kfree(buf);
+	}
+	offset = 0;
+}
+
+static void __vb2_buf_mem_free(struct vb2_buffer *vb)
+{
+	struct vb2_queue *q = vb->vb2_queue;
+	unsigned int plane;
+
+	for (plane = 0; plane < vb->num_planes; ++plane) {
+		struct vb2_dc_buf *buf = vb->planes[plane].mem_priv;
+		atomic_dec_return(&buf->refcount);
+	}
+}
+
+#endif
+
 
 /* Frame buffer descriptor */
 struct fbd {
@@ -89,8 +146,14 @@ struct atmel_isi {
 	struct				list_head dma_desc_head;
 	struct isi_dma_desc		dma_desc[MAX_BUFFER_NUM];
 
+#ifdef ANDROID
+	void				*video_buf;
+	u32				video_buf_phys;
+#endif	
+
 	struct completion		complete;
 	struct clk			*pclk;
+	struct clk			*pck1;
 	unsigned int			irq;
 
 	struct isi_platform_data	*pdata;
@@ -114,26 +177,34 @@ static u32 isi_readl(struct atmel_isi *isi, u32 reg)
 static int configure_geometry(struct atmel_isi *isi, u32 width,
 			u32 height, enum v4l2_mbus_pixelcode code)
 {
-	u32 cfg2, cr;
+	u32 cfg2, cr, psize;
 
 	switch (code) {
 	/* YUV, including grey */
 	case V4L2_MBUS_FMT_Y8_1X8:
 		cr = ISI_CFG2_GRAYSCALE;
 		break;
+	/* Default format output by isi module is: Cb Y1 Cr Y2/ U Y1 V Y2 */
+	/* Output data format from ov2640 is: U Y1 V Y2 */
 	case V4L2_MBUS_FMT_UYVY8_2X8:
-		cr = ISI_CFG2_YCC_SWAP_MODE_3;
-		break;
-	case V4L2_MBUS_FMT_VYUY8_2X8:
-		cr = ISI_CFG2_YCC_SWAP_MODE_2;
-		break;
-	case V4L2_MBUS_FMT_YUYV8_2X8:
-		cr = ISI_CFG2_YCC_SWAP_MODE_1;
-		break;
-	case V4L2_MBUS_FMT_YVYU8_2X8:
+	 	/* ISI output will be U Y1 V Y2 */
 		cr = ISI_CFG2_YCC_SWAP_DEFAULT;
 		break;
-	/* RGB, TODO */
+	case V4L2_MBUS_FMT_VYUY8_2X8:
+	 	/* ISI output will be U Y1 V Y2 */
+		cr = ISI_CFG2_YCC_SWAP_MODE_1;
+		break;
+	case V4L2_MBUS_FMT_YUYV8_2X8:
+		/* ISI output will be U Y1 V Y2 */
+		cr = ISI_CFG2_YCC_SWAP_MODE_2;
+		break;
+	case V4L2_MBUS_FMT_YVYU8_2X8:
+		/* ISI output will be U Y1 V Y2 */
+		cr = ISI_CFG2_YCC_SWAP_MODE_3;
+		break;
+	case V4L2_MBUS_FMT_RGB565_2X8_LE:
+		cr = ISI_CFG2_COL_SPACE | ISI_CFG2_RGB_MODE;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -141,6 +212,9 @@ static int configure_geometry(struct atmel_isi *isi, u32 width,
 	isi_writel(isi, ISI_CTRL, ISI_CTRL_DIS);
 
 	cfg2 = isi_readl(isi, ISI_CFG2);
+	cfg2 &= ~(ISI_CFG2_YCC_SWAP_MASK);
+	cfg2 &= ~(ISI_CFG2_COL_SPACE);
+	cfg2 &= ~(ISI_CFG2_RGB_MODE);
 	cfg2 |= cr;
 	/* Set width */
 	cfg2 &= ~(ISI_CFG2_IM_HSIZE_MASK);
@@ -151,11 +225,19 @@ static int configure_geometry(struct atmel_isi *isi, u32 width,
 	cfg2 |= ((height - 1) << ISI_CFG2_IM_VSIZE_OFFSET)
 			& ISI_CFG2_IM_VSIZE_MASK;
 	isi_writel(isi, ISI_CFG2, cfg2);
+	if(use_preview_path){
+		psize = 0;
+		psize |= ((width - 1) << ISI_PSIZE_IM_HSIZE_OFFSET) &
+			ISI_PSIZE_IM_HSIZE_MASK;
+		psize |= ((height - 1) << ISI_PSIZE_IM_VSIZE_OFFSET) &
+			ISI_PSIZE_IM_VSIZE_MASK;
+		isi_writel(isi, ISI_PSIZE, psize);
+	}
 
 	return 0;
 }
 
-static irqreturn_t atmel_isi_handle_streaming(struct atmel_isi *isi)
+static irqreturn_t atmel_isi_handle_streaming(struct atmel_isi *isi, bool isCapture)
 {
 	if (isi->active) {
 		struct vb2_buffer *vb = &isi->active->vb;
@@ -173,11 +255,19 @@ static irqreturn_t atmel_isi_handle_streaming(struct atmel_isi *isi)
 		/* start next dma frame. */
 		isi->active = list_entry(isi->video_buffer_list.next,
 					struct frame_buffer, list);
-		isi_writel(isi, ISI_DMA_C_DSCR,
-			isi->active->p_dma_desc->fbd_phys);
-		isi_writel(isi, ISI_DMA_C_CTRL,
-			ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
-		isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_C_CH);
+		if(isCapture){
+			isi_writel(isi, ISI_DMA_C_DSCR,
+				isi->active->p_dma_desc->fbd_phys);
+			isi_writel(isi, ISI_DMA_C_CTRL,
+				ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
+			isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_C_CH);
+		}else{
+			isi_writel(isi, ISI_DMA_P_DSCR,
+				isi->active->p_dma_desc->fbd_phys);
+			isi_writel(isi, ISI_DMA_P_CTRL,
+				ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
+			isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_P_CH);
+		}
 	}
 	return IRQ_HANDLED;
 }
@@ -211,7 +301,10 @@ static irqreturn_t isi_interrupt(int irq, void *dev_id)
 			ret = IRQ_HANDLED;
 		}
 		if (likely(pending & ISI_SR_CXFR_DONE))
-			ret = atmel_isi_handle_streaming(isi);
+			ret = atmel_isi_handle_streaming(isi, true);
+		if (likely(pending & ISI_SR_PXFR_DONE)){
+			ret = atmel_isi_handle_streaming(isi, false);
+		}
 	}
 
 	spin_unlock(&isi->lock);
@@ -372,21 +465,26 @@ static void start_dma(struct atmel_isi *isi, struct frame_buffer *buffer)
 	isi_writel(isi, ISI_INTEN,
 			ISI_SR_CXFR_DONE | ISI_SR_PXFR_DONE);
 
-	/* Check if already in a frame */
-	if (isi_readl(isi, ISI_STATUS) & ISI_CTRL_CDC) {
-		dev_err(isi->icd->dev.parent, "Already in frame handling.\n");
-		return;
+	if(use_preview_path) {
+		isi_writel(isi, ISI_DMA_P_DSCR, buffer->p_dma_desc->fbd_phys);
+		isi_writel(isi, ISI_DMA_P_CTRL, ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
+		isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_P_CH);
+	} else {
+		/* Check if already in a frame */
+		if (isi_readl(isi, ISI_STATUS) & ISI_CTRL_CDC) {
+			dev_err(isi->icd->dev.parent, "Already in frame handling.\n");
+			return;
+		}
+		isi_writel(isi, ISI_DMA_C_DSCR, buffer->p_dma_desc->fbd_phys);
+		isi_writel(isi, ISI_DMA_C_CTRL, ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
+		isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_C_CH);
+		/* Enable linked list */
+		cfg1 |= isi->pdata->frate | ISI_CFG1_DISCR;
+		/* Enable codec path */
+		ctrl = ISI_CTRL_CDC;
 	}
-
-	isi_writel(isi, ISI_DMA_C_DSCR, buffer->p_dma_desc->fbd_phys);
-	isi_writel(isi, ISI_DMA_C_CTRL, ISI_DMA_CTRL_FETCH | ISI_DMA_CTRL_DONE);
-	isi_writel(isi, ISI_DMA_CHER, ISI_DMA_CHSR_C_CH);
-
-	/* Enable linked list */
-	cfg1 |= isi->pdata->frate | ISI_CFG1_DISCR;
-
-	/* Enable codec path and ISI */
-	ctrl = ISI_CTRL_CDC | ISI_CTRL_EN;
+	/* Enable ISI */
+	ctrl |= ISI_CTRL_EN;
 	isi_writel(isi, ISI_CTRL, ctrl);
 	isi_writel(isi, ISI_CFG1, cfg1);
 }
@@ -460,8 +558,14 @@ static int stop_streaming(struct vb2_queue *vq)
 	list_for_each_entry_safe(buf, node, &isi->video_buffer_list, list) {
 		list_del_init(&buf->list);
 		vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
+#ifdef ANDROID		
+		__vb2_buf_mem_free(&buf->vb);
+#endif
 	}
 	spin_unlock_irq(&isi->lock);
+
+	if(use_preview_path)
+		goto STOP;
 
 	timeout = jiffies + FRAME_INTERVAL_MILLI_SEC * HZ;
 	/* Wait until the end of the current frame. */
@@ -474,7 +578,7 @@ static int stop_streaming(struct vb2_queue *vq)
 			"Timeout waiting for finishing codec request\n");
 		return -ETIMEDOUT;
 	}
-
+STOP:
 	/* Disable interrupts */
 	isi_writel(isi, ISI_INTDIS,
 			ISI_SR_CXFR_DONE | ISI_SR_PXFR_DONE);
@@ -499,6 +603,119 @@ static struct vb2_ops isi_video_qops = {
 	.wait_finish		= soc_camera_lock,
 };
 
+#ifdef ANDROID
+static void *vb2_dma_contig_alloc(void *alloc_ctx, unsigned long size)
+{
+	struct vb2_dc_conf *conf = alloc_ctx;
+	struct vb2_dc_buf *buf;
+	struct soc_camera_host *soc_host = to_soc_camera_host(conf->dev);
+	struct atmel_isi *isi = container_of(soc_host,
+					struct atmel_isi, soc_host);
+
+	buf = kzalloc(sizeof *buf, GFP_KERNEL);
+	if (!buf)
+		return ERR_PTR(-ENOMEM);
+
+	offset = PAGE_ALIGN(offset);
+
+	buf->vaddr = isi->video_buf + offset;
+	buf->paddr = isi->video_buf_phys + offset;
+	
+	if (!buf->vaddr || (offset > VID_LIMIT_BYTES)) {
+		dev_err(conf->dev, "dma_alloc_coherent of size %ld failed\n",
+			size);
+		kfree(buf);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	offset += size;
+
+	buf->conf = conf;
+	buf->size = size;
+
+	buf->handler.refcount = &buf->refcount;
+	buf->handler.put = vb2_dma_contig_put;
+	buf->handler.arg = buf;
+
+	atomic_inc(&buf->refcount);
+
+	return buf;
+}
+
+static void atmel_isi_vm_open(struct vm_area_struct *vma)
+{
+	printk(KERN_DEBUG "atmel_isi: vm_open\n");
+}
+
+static void atmel_isi_vm_close(struct vm_area_struct *vma)
+{
+	printk(KERN_DEBUG "atmel_isi: vm_close\n");
+}
+
+
+static struct vm_operations_struct atmel_isi_vm_ops = {
+	.open = atmel_isi_vm_open,
+	.close = atmel_isi_vm_close,
+};
+
+int mmap_pfn_range(struct vm_area_struct *vma, unsigned long paddr,
+				unsigned long size,
+				const struct vm_operations_struct *vm_ops,
+				void *priv)
+{
+	int ret;
+	
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	ret = remap_pfn_range(vma, vma->vm_start, paddr >> PAGE_SHIFT,
+				size, vma->vm_page_prot);
+	if (ret) {
+		printk(KERN_ERR "Remapping memory failed, error: %d\n", ret);
+		return ret;
+	}
+	if(!priv)
+		printk(KERN_DEBUG "mmap_pfn_range get a NULL point\n");
+
+	vma->vm_flags		|= VM_DONTEXPAND | VM_RESERVED;
+	vma->vm_private_data	= priv;
+	vma->vm_ops		= vm_ops;
+
+	vma->vm_ops->open(vma);
+
+	printk(KERN_DEBUG "%s: mapped paddr 0x%08lx at 0x%08lx, size %ld\n",
+			__func__, paddr, vma->vm_start, size);
+
+	return 0;
+}
+
+
+static int vb2_dma_contig_mmap(void *buf_priv, struct vm_area_struct *vma)
+{
+	struct vb2_dc_buf *buf = buf_priv;
+	struct soc_camera_host *soc_host = to_soc_camera_host(buf->conf->dev);
+	struct atmel_isi *isi = container_of(soc_host,
+					struct atmel_isi, soc_host);
+
+	unsigned long size = vma->vm_end - vma->vm_start;
+
+	if (!buf) {
+		printk(KERN_ERR "No buffer to map\n");
+		return -EINVAL;
+	}
+
+	printk(KERN_DEBUG "size: %d, buf->size: %d\n",size, buf->size);
+
+	if(size <= PAGE_ALIGN(buf->size))
+		return vb2_mmap_pfn_range(vma, buf->paddr, buf->size,
+				  &vb2_common_vm_ops, &buf->handler);
+	else
+		printk(KERN_DEBUG "Warning, we will mmap all the buffer to the application by one operate! May be this is called by android\n");
+	return mmap_pfn_range(vma, isi->video_buf_phys, size,
+				  &atmel_isi_vm_ops, NULL);
+}
+
+#endif
+
+
 /* ------------------------------------------------------------------
 	SOC camera operations for the device
    ------------------------------------------------------------------*/
@@ -511,6 +728,11 @@ static int isi_camera_init_videobuf(struct vb2_queue *q,
 	q->buf_struct_size = sizeof(struct frame_buffer);
 	q->ops = &isi_video_qops;
 	q->mem_ops = &vb2_dma_contig_memops;
+#ifdef ANDROID
+	q->mem_ops->alloc = vb2_dma_contig_alloc;
+	q->mem_ops->put = vb2_dma_contig_put;
+	q->mem_ops->mmap = vb2_dma_contig_mmap;
+#endif
 
 	return vb2_queue_init(q);
 }
@@ -525,6 +747,18 @@ static int isi_camera_set_fmt(struct soc_camera_device *icd,
 	struct v4l2_pix_format *pix = &f->fmt.pix;
 	struct v4l2_mbus_framefmt mf;
 	int ret;
+
+	switch (pix->pixelformat){
+	case V4L2_PIX_FMT_RGB565:
+		use_preview_path = true;
+		break;
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_UYVY:
+		use_preview_path = false;
+		break;
+	default:
+		use_preview_path = false;
+	}
 
 	xlate = soc_camera_xlate_by_fourcc(icd, pix->pixelformat);
 	if (!xlate) {
@@ -619,10 +853,17 @@ static int isi_camera_try_fmt(struct soc_camera_device *icd,
 
 static const struct soc_mbus_pixelfmt isi_camera_formats[] = {
 	{
-		.fourcc			= V4L2_PIX_FMT_YUYV,
+		.fourcc			= V4L2_PIX_FMT_UYVY,
 		.name			= "Packed YUV422 16 bit",
 		.bits_per_sample	= 8,
 		.packing		= SOC_MBUS_PACKING_2X8_PADHI,
+		.order			= SOC_MBUS_ORDER_LE,
+	},
+	{
+		.fourcc			= V4L2_PIX_FMT_RGB565,
+		.name			= "RGB565 16 bit",
+		.bits_per_sample		= 8,
+		.packing			= SOC_MBUS_PACKING_2X8_PADHI,
 		.order			= SOC_MBUS_ORDER_LE,
 	},
 };
@@ -728,6 +969,14 @@ static int isi_camera_get_formats(struct soc_camera_device *icd,
 			dev_dbg(icd->dev.parent, "Providing format %s using code %d\n",
 				isi_camera_formats[0].name, code);
 		}
+		if (xlate) {
+			formats++;
+			xlate->host_fmt	= &isi_camera_formats[1];
+			xlate->code	= code;
+			xlate++;
+			dev_dbg(icd->dev.parent, "Providing format %s using code %d\n",
+				isi_camera_formats[1].name, code);
+		}
 		break;
 	default:
 		if (!isi_camera_packing_supported(fmt))
@@ -759,6 +1008,10 @@ static int isi_camera_add_device(struct soc_camera_device *icd)
 	if (isi->icd)
 		return -EBUSY;
 
+	ret = clk_enable(isi->pck1);
+	if(ret)
+		return ret;
+
 	ret = clk_enable(isi->pclk);
 	if (ret)
 		return ret;
@@ -777,6 +1030,7 @@ static void isi_camera_remove_device(struct soc_camera_device *icd)
 	BUG_ON(icd != isi->icd);
 
 	clk_disable(isi->pclk);
+	clk_disable(isi->pck1);
 	isi->icd = NULL;
 
 	dev_dbg(icd->dev.parent, "Atmel ISI Camera driver detached from camera %d\n",
@@ -888,6 +1142,19 @@ static struct soc_camera_host_ops isi_soc_camera_host_ops = {
 	.set_parm	= isi_camera_set_parm,
 };
 
+static void __init isi_set_clk(void)
+{
+	struct clk *pck1;
+	struct clk *plla;
+
+	pck1 = clk_get(NULL, "pck1");
+	plla = clk_get(NULL, "plla");
+
+	clk_set_parent(pck1, plla);
+	/* for the sensor ov9655: 10< Fclk < 48, Fclk typ = 24MHz */
+	clk_set_rate(pck1, 25000000);
+}
+
 /* -----------------------------------------------------------------------*/
 static int __devexit atmel_isi_remove(struct platform_device *pdev)
 {
@@ -898,6 +1165,12 @@ static int __devexit atmel_isi_remove(struct platform_device *pdev)
 	free_irq(isi->irq, isi);
 	soc_camera_host_unregister(soc_host);
 	vb2_dma_contig_cleanup_ctx(isi->alloc_ctx);
+#ifdef ANDROID	
+	dma_free_coherent(&pdev->dev,
+			VID_LIMIT_BYTES,
+			isi->video_buf,
+			isi->video_buf_phys);
+#endif
 	dma_free_coherent(&pdev->dev,
 			sizeof(struct fbd) * MAX_BUFFER_NUM,
 			isi->p_fb_descriptors,
@@ -905,6 +1178,7 @@ static int __devexit atmel_isi_remove(struct platform_device *pdev)
 
 	iounmap(isi->regs);
 	clk_put(isi->pclk);
+	clk_put(isi->pck1);
 	kfree(isi);
 
 	return 0;
@@ -914,7 +1188,7 @@ static int __devinit atmel_isi_probe(struct platform_device *pdev)
 {
 	unsigned int irq;
 	struct atmel_isi *isi;
-	struct clk *pclk;
+	struct clk *pclk, *pck1;
 	struct resource *regs;
 	int ret, i;
 	struct device *dev = &pdev->dev;
@@ -932,9 +1206,18 @@ static int __devinit atmel_isi_probe(struct platform_device *pdev)
 	if (!regs)
 		return -ENXIO;
 
+	isi_set_clk();
+
 	pclk = clk_get(&pdev->dev, "isi_clk");
 	if (IS_ERR(pclk))
 		return PTR_ERR(pclk);
+
+	pck1 = clk_get(NULL, "pck1");
+	if (IS_ERR(pck1)){
+		ret = -EINVAL;
+		dev_err(&pdev->dev, "Can't get pck1\n");
+		goto err_get_pck1;
+	}
 
 	isi = kzalloc(sizeof(struct atmel_isi), GFP_KERNEL);
 	if (!isi) {
@@ -944,6 +1227,7 @@ static int __devinit atmel_isi_probe(struct platform_device *pdev)
 	}
 
 	isi->pclk = pclk;
+	isi->pck1 = pck1;
 	isi->pdata = pdata;
 	isi->active = NULL;
 	spin_lock_init(&isi->lock);
@@ -968,12 +1252,24 @@ static int __devinit atmel_isi_probe(struct platform_device *pdev)
 		list_add(&isi->dma_desc[i].list, &isi->dma_desc_head);
 	}
 
+#ifdef ANDROID
+	isi->video_buf = dma_alloc_coherent(&pdev->dev,
+				VID_LIMIT_BYTES,
+				&isi->video_buf_phys,
+				GFP_KERNEL);
+	if (!isi->video_buf){
+		ret = -ENOMEM;
+		dev_err(&pdev->dev, "Can't allocate video buffer.Size: 0x%x!\n",VID_LIMIT_BYTES);
+		goto err_alloc_videobuf;		
+	}
+#endif
+
 	isi->alloc_ctx = vb2_dma_contig_init_ctx(&pdev->dev);
 	if (IS_ERR(isi->alloc_ctx)) {
 		ret = PTR_ERR(isi->alloc_ctx);
 		goto err_alloc_ctx;
 	}
-
+	
 	isi->regs = ioremap(regs->start, resource_size(regs));
 	if (!isi->regs) {
 		ret = -ENOMEM;
@@ -1016,21 +1312,60 @@ err_req_irq:
 err_ioremap:
 	vb2_dma_contig_cleanup_ctx(isi->alloc_ctx);
 err_alloc_ctx:
+#ifdef ANDROID
 	dma_free_coherent(&pdev->dev,
+			VID_LIMIT_BYTES,
+			isi->video_buf,
+			isi->video_buf_phys);
+
+#endif
+err_alloc_videobuf:
+		dma_free_coherent(&pdev->dev,
 			sizeof(struct fbd) * MAX_BUFFER_NUM,
 			isi->p_fb_descriptors,
 			isi->fb_descriptors_phys);
 err_alloc_descriptors:
 	kfree(isi);
 err_alloc_isi:
-	clk_put(isi->pclk);
+	clk_put(pck1);
+err_get_pck1:
+	clk_put(pclk);
 
 	return ret;
 }
 
+#ifdef CONFIG_PM
+
+static int atmel_isi_suspend(struct platform_device *pdev, pm_message_t mesg)
+{
+	struct soc_camera_host *soc_host = to_soc_camera_host(&pdev->dev);
+	struct atmel_isi *isi = container_of(soc_host,
+					struct atmel_isi, soc_host);
+	/* Nothing need to do here, clock has been disabled by isi_camera_remove_device */
+	return 0;
+}
+
+static int atmel_isi_resume(struct platform_device *pdev)
+{
+	int ret = 0;
+	struct soc_camera_host *soc_host = to_soc_camera_host(&pdev->dev);
+	struct atmel_isi *isi = container_of(soc_host,
+					struct atmel_isi, soc_host);
+	/* Nothing need to do here, clock has been enabled by isi_camera_add_device */
+	return ret;
+}
+
+#else
+#define atmel_isi_suspend	NULL
+#define atmel_isi_resume	NULL
+#endif
+
+
 static struct platform_driver atmel_isi_driver = {
 	.probe		= atmel_isi_probe,
 	.remove		= __devexit_p(atmel_isi_remove),
+	.suspend	= atmel_isi_suspend,
+	.resume 	= atmel_isi_resume,
 	.driver		= {
 		.name = "atmel_isi",
 		.owner = THIS_MODULE,

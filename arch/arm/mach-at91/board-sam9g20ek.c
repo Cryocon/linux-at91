@@ -47,6 +47,7 @@
 #include "sam9_smc.h"
 #include "generic.h"
 
+#include <linux/usb/android_composite.h>
 /*
  * board revision encoding
  * bit 0:
@@ -124,7 +125,7 @@ static struct spi_board_info ek_spi_devices[] = {
 #endif
 };
 
-
+static struct usba_platform_data __initdata ek_usba_udc_data;
 /*
  * MACB Ethernet device
  */
@@ -139,27 +140,31 @@ static void __init ek_add_device_macb(void)
 		ek_macb_data.phy_irq_pin = AT91_PIN_PB0;
 
 	at91_add_device_eth(&ek_macb_data);
-}
+};
 
 /*
  * NAND flash
  */
 static struct mtd_partition __initdata ek_nand_partition[] = {
-	{
-		.name   = "Bootstrap",
-		.offset = 0,
-		.size   = 4 * SZ_1M,
-	},
-	{
-		.name	= "Partition 1",
-		.offset	= MTDPART_OFS_NXTBLK,
-		.size	= 60 * SZ_1M,
-	},
-	{
-		.name	= "Partition 2",
-		.offset	= MTDPART_OFS_NXTBLK,
-		.size	= MTDPART_SIZ_FULL,
-	},
+     {
+         .name   = "Bootstrap",
+         .offset = 0,
+         .size   = 5 * 1024 * 1024,
+     },
+ 
+     {
+         .name   = "system",
+         .offset = 5 * 1024 * 1024,
+         .size   = 95 * 1024 * 1024,
+     },
+
+     {
+         .name   ="userdata",        /*for mtd@userdata*/
+         .offset = 100 * 1024 * 1024,
+         .size   = MTDPART_SIZ_FULL,
+
+     },
+
 };
 
 static struct mtd_partition * __init nand_partitions(int size, int *num_partitions)
@@ -246,6 +251,135 @@ static void __init ek_add_device_mmc(void)
 #else
 	at91_add_device_mmc(0, &ek_mmc_data);
 #endif
+}
+
+/*
+ *   *  Android ADB
+ *     */
+static char *usb_functions_ums[] = {
+		"usb_mass_storage",
+};
+
+static char *usb_functions_ums_adb[] = {
+		"usb_mass_storage",
+		"adb",
+};
+
+static char *usb_functions_rndis[] = {
+		"rndis",
+};
+
+static char *usb_functions_rndis_adb[] = {
+		"rndis",
+		"adb",
+};
+
+#ifdef CONFIG_USB_ANDROID_DIAG
+static char *usb_functions_adb_diag[] = {
+		"usb_mass_storage",
+		"adb",
+		"diag",
+};
+#endif
+
+static char *usb_functions_all[] = {
+#ifdef CONFIG_USB_ANDROID_RNDIS
+		"rndis",
+#endif
+		"usb_mass_storage",
+		"adb",
+#ifdef CONFIG_USB_ANDROID_ACM
+		"acm",
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
+		"diag",
+#endif
+};
+
+static struct android_usb_product usb_products[] = {
+		{
+			.product_id	= 0x6129,
+			.num_functions	= ARRAY_SIZE(usb_functions_ums),
+			.functions	= usb_functions_ums,
+	    },
+		{
+			.product_id	= 0x6155,
+			.num_functions	= ARRAY_SIZE(usb_functions_ums_adb),
+			.functions	= usb_functions_ums_adb,
+		},
+    	{
+			.product_id	= 0x6156,
+			.num_functions	= ARRAY_SIZE(usb_functions_rndis),
+			.functions	= usb_functions_rndis,
+		},
+		{
+	    	.product_id	= 0x6157,
+			.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
+			.functions	= usb_functions_rndis_adb,
+		},
+#ifdef CONFIG_USB_ANDROID_DIAG
+		{
+			.product_id	= 0x6158,
+			.num_functions	= ARRAY_SIZE(usb_functions_adb_diag),
+			.functions	= usb_functions_adb_diag,
+		},
+#endif
+};
+
+static struct usb_mass_storage_platform_data mass_storage_pdata = {
+		.nluns		= 1,
+		.vendor		= "ATMEL",
+		.product	= "SAM9G20",
+		.release	= 0x0100,
+};
+
+static struct platform_device usb_mass_storage_device = {
+		.name	= "usb_mass_storage",
+		.id	= -1,
+		.dev	= {
+					.platform_data = &mass_storage_pdata,
+				},
+};
+
+#ifdef CONFIG_USB_ANDROID_RNDIS
+static struct usb_ether_platform_data rndis_pdata = {
+		/* ethaddr is filled by board_serialno_setup */
+		.vendorID	= 0x03EB,
+		.vendorDescr	= "ATMEL",
+};
+
+static struct platform_device rndis_device = {
+		.name	= "rndis",
+	    .id	= -1,
+		.dev	= {
+		         	.platform_data = &rndis_pdata,
+				},
+};
+#endif
+
+static struct android_usb_platform_data android_usb_pdata = {
+		.vendor_id	= 0x03EB,
+		.product_id	= 0x6129,
+		.version	= 0x0100,
+		.product_name		= "SAM9X5",
+		.manufacturer_name	= "ATMEL",
+		.num_products = ARRAY_SIZE(usb_products),
+		.products = usb_products,
+		.num_functions = ARRAY_SIZE(usb_functions_all),
+		.functions = usb_functions_all,
+};
+
+static struct platform_device android_usb_device = {
+		.name	= "android_usb",
+		.id		= -1,
+		.dev		= {
+				.platform_data = &android_usb_pdata,
+				},
+};
+
+static void __init at91_usb_adb_init(void){
+		platform_device_register(&android_usb_device);
+		platform_device_register(&usb_mass_storage_device);
 }
 
 /*
@@ -402,6 +536,8 @@ static void __init ek_board_init(void)
 	at91_set_B_periph(AT91_PIN_PC1, 0);
 	/* SSC (for WM8731) */
 	at91_add_device_ssc(AT91SAM9260_ID_SSC, ATMEL_SSC_TX);
+		/*usb adb*/
+	at91_usb_adb_init();
 }
 
 MACHINE_START(AT91SAM9G20EK, "Atmel AT91SAM9G20-EK")

@@ -32,6 +32,39 @@
 #define ADC_DEFAULT_CLOCK	100000
 #define ZTHRESHOLD		3200
 
+#if defined(CONFIG_MACH_AT91SAM9G45EKES)
+	#define COUNT_MAX		1
+#else
+	#define COUNT_MAX		20
+#endif
+
+#define ANDROID_CALIBRATION
+
+#if defined(ANDROID_CALIBRATION)
+int calibrated;	
+int tx1;		
+int ty1;		
+int tz1;		
+int tx2;		
+int ty2;		
+int tz2;		
+int rawX;
+int rawY;
+int ts;
+
+module_param(tx1, int, 0664);
+module_param(ty1, int, 0664);
+module_param(tz1, int, 0664);
+module_param(tx2, int, 0664);
+module_param(ty2, int, 0664);
+module_param(tz2, int, 0664);
+module_param(rawX, int, 0664);
+module_param(rawY, int, 0664);
+module_param(ts, int, 0664);
+module_param(calibrated, int, 0664);
+
+#endif
+
 struct atmel_tsadcc {
 	struct input_dev	*input;
 	char			phys[32];
@@ -43,32 +76,91 @@ struct atmel_tsadcc {
 };
 
 static void __iomem		*tsc_base;
+static unsigned int		trigger_period;
 
 #define atmel_tsadcc_read(reg)		__raw_readl(tsc_base + (reg))
 #define atmel_tsadcc_write(reg, val)	__raw_writel((val), tsc_base + (reg))
 
-static void atmel_tsadcc_dump_conf(struct platform_device *pdev)
-{
-	dev_info(&pdev->dev, "--- configuration ---\n");
-	dev_info(&pdev->dev, "Mode Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_MR));
-	dev_info(&pdev->dev, "Trigger Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_TRGR));
-	dev_info(&pdev->dev, "Touchscreen Mode Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_TSMR));
-	dev_info(&pdev->dev, "Analog Control Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_ACR));
-	dev_info(&pdev->dev, "ADC Channel Status Register: %#x\n", atmel_tsadcc_read(ATMEL_TSADCC_CHSR));
-	dev_info(&pdev->dev, "---------------------\n");
+#if defined(CONFIG_MACH_AT91SAM9M10G45EK) || defined(CONFIG_MACH_AT91SAM9G45EKES) || defined(CONFIG_MACH_AT91SAM9M10EKES)
+static unsigned int do_filter(unsigned int val[], int count, int needed) {
+	int i, j;
+	int max_delta, max_delta_index;
+	unsigned int average;
+
+	if (needed == 0)
+		return val[0];
+
+	for (i = count; i > needed; i--) {
+		average = 0;
+		for (j = 0; j < i; j++)
+			average += val[j];
+		average /= i;
+
+		max_delta = 0;
+		max_delta_index = -1;
+		for (j = 0; j < i; j++) {
+			if (abs(val[j] - average) > max_delta) {
+				max_delta = abs(val[j] - average);
+				max_delta_index = j;
+			}
+		}
+
+		if (max_delta_index < 0)
+			return average;
+
+		if (max_delta_index < i - 1)
+			for (j = 0; j < i - max_delta_index; j++)
+				val[max_delta_index + j] = val[max_delta_index + j + 1];
+	}
+
+	average = 0;
+	for (i = 0; i < needed; i++)
+		average += val[i];
+	average /= needed;
+
+	return average;
 }
+#endif
+
+#if defined(ANDROID_CALIBRATION)
+static void do_calibrate(int *x,int *y){
+	int cal_x,cal_y;
+	rawX = *x;
+	rawY = *y;
+	cal_x = *x;
+	cal_y = *y;
+		 
+	if(calibrated && ts)
+	{
+		cal_x = (rawX*tx1 + rawY*ty1 + tz1)/ts ;
+		cal_y = (rawX*tx2 + rawY*ty2 + tz2)/ts ;
+	}
+	*x = cal_x;
+	*y = cal_y;
+}
+
+#else
+static void do_calibrate(int * x, int * y){}
+#endif
 
 static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 {
 	struct atmel_tsadcc	*ts_dev = (struct atmel_tsadcc *)dev;
 	struct input_dev	*input_dev = ts_dev->input;
 	struct at91_tsadcc_data *pdata = input_dev->dev.parent->platform_data;
+	static int count = 0;
 
 	unsigned int status;
 	unsigned int reg;
+	unsigned int x, y;
 	unsigned int z1, z2;
 	unsigned int Rxp = 1;
 	unsigned int factor = 1000;
+
+#if defined(CONFIG_MACH_AT91SAM9M10G45EK) || defined(CONFIG_MACH_AT91SAM9G45EKES) || defined(CONFIG_MACH_AT91SAM9M10EKES)
+	static unsigned int point_buffer_x[COUNT_MAX];
+	static unsigned int point_buffer_y[COUNT_MAX];
+#endif
 
 	status = atmel_tsadcc_read(ATMEL_TSADCC_SR);
 	status &= atmel_tsadcc_read(ATMEL_TSADCC_IMR);
@@ -89,6 +181,7 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		atmel_tsadcc_write(ATMEL_TSADCC_IER, ATMEL_TSADCC_PENCNT);
 
 		input_report_key(input_dev, BTN_TOUCH, 0);
+		input_report_abs(input_dev, ABS_PRESSURE, 0);
 		input_sync(input_dev);
 
 	} else if (status & ATMEL_TSADCC_PENCNT) {
@@ -106,20 +199,20 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		atmel_tsadcc_write(ATMEL_TSADCC_IDR, ATMEL_TSADCC_PENCNT);
 		atmel_tsadcc_write(ATMEL_TSADCC_IER,
 				   ATMEL_TSADCC_CONVERSION_END | ATMEL_TSADCC_NOCNT);
-		/* this value is related to the resistor bits value of
-		 * ACR register and R64. If internal resistor value is
-		 * increased then this value has to be increased. This
-		 * behavior seems to happen only with averaging on 8
-		 * values
-		 */
-		atmel_tsadcc_write(ATMEL_TSADCC_TRGR,
-				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x0FF << 16));
+		if (cpu_has_9x5_adc()) {
+		    atmel_tsadcc_write(ATMEL_TSADCC_TRGR,
+				   ATMEL_TSADCC_TRGMOD_PERIOD | (0x00D0 << 16));
+		}else{
+		    atmel_tsadcc_write(ATMEL_TSADCC_TRGR,
+				   ATMEL_TSADCC_TRGMOD_PERIOD | (trigger_period << 16));
+		}
+
+              count = 0;
 
 	} else if ((status & ATMEL_TSADCC_CONVERSION_END) == ATMEL_TSADCC_CONVERSION_END) {
 		/* Conversion finished */
-
 		/* make new measurement */
-		if (cpu_has_9x5_adc()) {
+ 		if (cpu_has_9x5_adc()) {
 			unsigned int xscale, yscale;
 
 			/* calculate position */
@@ -151,14 +244,38 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 			ts_dev->prev_absy /= atmel_tsadcc_read(ATMEL_TSADCC_CDR0);
 		}
 
-		/* report measurement to input layer */
+#if defined(CONFIG_MACH_AT91SAM9M10G45EK) || defined(CONFIG_MACH_AT91SAM9G45EKES) || defined(CONFIG_MACH_AT91SAM9M10EKES)
+		if (count < COUNT_MAX) {
+			point_buffer_x[count] = ts_dev->prev_absx;
+			point_buffer_y[count] = ts_dev->prev_absy;
+			count++;
+		} else {
+			count = 0;
+			x =  do_filter(point_buffer_x, COUNT_MAX, COUNT_MAX * 3 / 4);
+			y =  do_filter(point_buffer_y, COUNT_MAX, COUNT_MAX * 3 / 4);
+
+			do_calibrate(&x,&y);
+			input_report_abs(input_dev, ABS_X, x);
+			input_report_abs(input_dev, ABS_Y, y);
+			input_report_key(input_dev, BTN_TOUCH, 1);
+			input_report_abs(input_dev, ABS_PRESSURE, 7500);
+			input_sync(input_dev);
+		}
+#endif
+
+#if defined(CONFIG_MACH_AT91SAM9X5EK)
+				/* report measurement to input layer */
 		if (ts_dev->prev_absz < ZTHRESHOLD) {
 			dev_dbg(&input_dev->dev,
 					"x = %d, y = %d, pressure = %d\n",
 					ts_dev->prev_absx, ts_dev->prev_absy,
 					ts_dev->prev_absz);
-			input_report_abs(input_dev, ABS_X, ts_dev->prev_absx);
-			input_report_abs(input_dev, ABS_Y, ts_dev->prev_absy);
+			x = ts_dev->prev_absx;
+			y = ts_dev->prev_absy; 
+			
+			do_calibrate(&x,&y);		
+			input_report_abs(input_dev, ABS_X, x);			
+			input_report_abs(input_dev, ABS_Y, y);
 			if (cpu_has_9x5_adc())
 				input_report_abs(input_dev, ABS_PRESSURE, ts_dev->prev_absz);
 			input_report_key(input_dev, BTN_TOUCH, 1);
@@ -167,6 +284,7 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 			dev_dbg(&input_dev->dev,
 					"pressure too low: not reporting\n");
 		}
+#endif        
 	}
 
 	return IRQ_HANDLED;
@@ -185,6 +303,7 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 	int		err = 0;
 	unsigned int	prsc;
 	unsigned int	reg;
+	unsigned int	startup_time;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -251,10 +370,13 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 	input_dev->phys = ts_dev->phys;
 	input_dev->dev.parent = &pdev->dev;
 
+#if defined(ANDROID_CALIBRATION)
+    calibrated = 0;
+#endif
 	__set_bit(EV_ABS, input_dev->evbit);
 	input_set_abs_params(input_dev, ABS_X, 0, 0x3FF, 0, 0);
 	input_set_abs_params(input_dev, ABS_Y, 0, 0x3FF, 0, 0);
-	input_set_abs_params(input_dev, ABS_PRESSURE, 0, 0xffffff, 0, 0);
+	input_set_abs_params(input_dev, ABS_PRESSURE, 0, 15000, 0, 0);
 
 	input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
 
@@ -271,6 +393,18 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 		pdata->adc_clock = ADC_DEFAULT_CLOCK;
 
 	prsc = (prsc / (2 * pdata->adc_clock)) - 1;
+
+#if defined(CONFIG_MACH_AT91SAM9M10G45EK)
+	trigger_period = pdata->adc_clock / (200 * COUNT_MAX) -1;
+	if (trigger_period < 1)
+		trigger_period = 1;
+	startup_time = (60 * pdata->adc_clock) / (8 * 1000000) - 1;
+	if (startup_time < 1)
+		startup_time = 1;
+#else
+	trigger_period = 0x0FFF;
+	startup_time = 0x26;
+#endif    
 
 	/* saturate if this value is too high */
 	if (cpu_is_at91sam9rl()) {
@@ -294,7 +428,7 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 			((0x00 << 5) & ATMEL_TSADCC_SLEEP)	|	/* Normal Mode */
 			((0x01 << 6) & ATMEL_TSADCC_PENDET)	|	/* Enable Pen Detect */
 			(prsc << 8)				|
-			((0x26 << 16) & ATMEL_TSADCC_STARTUP)	|
+			((startup_time << 16) & ATMEL_TSADCC_STARTUP)	|
 			((pdata->pendet_debounce << 28) & ATMEL_TSADCC_PENDBC);
 	}
 
@@ -315,20 +449,8 @@ static int __devinit atmel_tsadcc_probe(struct platform_device *pdev)
 			(pdata->ts_sample_hold_time << 24) & ATMEL_TSADCC_TSSHTIM);
 	}
 
-	/* Change adc internal resistor value for better pen detection,
-	 * default value is 100 kOhm.
-	 * 0 = 200 kOhm, 1 = 150 kOhm, 2 = 100 kOhm, 3 = 50 kOhm
-	 * option only available on ES2 and higher
-	 */
-	if (cpu_has_9x5_adc()) {
-		if (pdata->pendet_sensitivity <= ATMEL_TSADCC_PENDET_SENSITIVITY)
-			atmel_tsadcc_write(ATMEL_TSADCC_ACR, pdata->pendet_sensitivity);
-	}
-
 	atmel_tsadcc_read(ATMEL_TSADCC_SR);
 	atmel_tsadcc_write(ATMEL_TSADCC_IER, ATMEL_TSADCC_PENCNT);
-
-	/* atmel_tsadcc_dump_conf(pdev); */
 
 	/* All went ok, so register to the input system */
 	err = input_register_device(input_dev);

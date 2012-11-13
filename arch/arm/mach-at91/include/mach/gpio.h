@@ -15,6 +15,7 @@
 
 #include <linux/kernel.h>
 #include <asm/irq.h>
+#include <linux/init.h>
 
 #define PIN_BASE		NR_AIC_IRQS
 

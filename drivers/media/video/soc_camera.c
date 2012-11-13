@@ -650,6 +650,7 @@ static int soc_camera_s_fmt_vid_cap(struct file *file, void *priv,
 				    struct v4l2_format *f)
 {
 	struct soc_camera_device *icd = file->private_data;
+	struct soc_camera_host *ici = to_soc_camera_host(icd->dev.parent);
 	int ret;
 
 	WARN_ON(priv != file->private_data);
@@ -662,10 +663,11 @@ static int soc_camera_s_fmt_vid_cap(struct file *file, void *priv,
 	if (icd->streamer && icd->streamer != file)
 		return -EBUSY;
 
-	if (icd->vb_vidq.bufs[0]) {
-		dev_err(&icd->dev, "S_FMT denied: queue initialised\n");
-		return -EBUSY;
-	}
+	if (ici->ops->init_videobuf)
+		if (icd->vb_vidq.bufs[0]) {
+			dev_err(&icd->dev, "S_FMT denied: queue initialised\n");
+			return -EBUSY;
+		}
 
 	ret = soc_camera_set_fmt(icd, f);
 
