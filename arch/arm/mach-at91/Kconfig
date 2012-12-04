@@ -480,6 +480,9 @@ config MACH_AT91SAM9X5EK
 	  Select this if you re using Atmel's AT91SAM9x5-EK Evaluation Kit.
 	  Supported chips are sam9g15, sam9g25, sam9x25, sam9g35 and sam9x35.
 
+config MACH_CRYOCON9G35EK
+	bool "CryoCon's Atmel AT91SAM9x5 EK with sam9g35"
+
 endif
 
 # ----------------------------------------------------------

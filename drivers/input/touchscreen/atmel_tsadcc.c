@@ -263,7 +263,7 @@ static irqreturn_t atmel_tsadcc_interrupt(int irq, void *dev)
 		}
 #endif
 
-#if defined(CONFIG_MACH_AT91SAM9X5EK)
+#if defined(CONFIG_MACH_AT91SAM9X5EK) || defined(CONFIG_MACH_CRYOCON9G35EK)
 				/* report measurement to input layer */
 		if (ts_dev->prev_absz < ZTHRESHOLD) {
 			dev_dbg(&input_dev->dev,
