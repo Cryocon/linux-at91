@@ -736,8 +736,6 @@ static void atmel_tx_dma(struct uart_port *port)
 			atmel_tx_dma_release(atmel_port);
 			return;
 		}
-
-		dma_async_issue_pending(chan);
 	} else {
 		if (atmel_port->rs485.flags & SER_RS485_ENABLED) {
 			/* DMA done, stop TX, start RX for RS485 */
