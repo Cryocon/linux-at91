@@ -158,7 +158,6 @@ struct atmel_uart_port {
 	dma_cookie_t			cookie_tx;
 	dma_cookie_t			cookie_rx;
 
-	signed int			xmit_head;
 	struct scatterlist		sg_tx;
 	struct scatterlist		sg_rx;
 	unsigned int			sg_len_tx;
@@ -596,9 +595,13 @@ static void atmel_dma_tx_complete(void *arg)
 	struct atmel_uart_port *atmel_port = arg;
 	struct uart_port *port = &atmel_port->uart;
 	struct circ_buf *xmit = &port->state->xmit;
+	struct dma_chan *chan = atmel_port->chan_tx;
 	unsigned long flags;
 
 	spin_lock_irqsave(&port->lock, flags);
+
+	if (chan)
+		chan->device->device_control(chan, DMA_TERMINATE_ALL, 0);
 
 	xmit->tail += sg_dma_len(&atmel_port->sg_tx);
 	xmit->tail &= UART_XMIT_SIZE - 1;
@@ -634,7 +637,16 @@ static void atmel_dma_rx_complete(void *arg)
 static void atmel_tx_dma_release(struct atmel_uart_port *atmel_port)
 {
 	struct dma_chan *chan = atmel_port->chan_tx;
+	struct uart_port *port = &(atmel_port->uart);
 
+	if (chan) {
+		chan->device->device_control(chan, DMA_TERMINATE_ALL, 0);
+		dma_release_channel(chan);
+		dma_unmap_sg(port->dev, &atmel_port->sg_tx, 1,
+				DMA_TO_DEVICE);
+	}
+
+	atmel_port->desc_tx = NULL;
 	atmel_port->chan_tx = NULL;
 	atmel_port->cookie_tx = -EINVAL;
 }
@@ -667,13 +679,9 @@ static void atmel_tx_dma(struct uart_port *port)
 	struct dma_async_tx_descriptor *desc;
 	struct scatterlist *sg = &atmel_port->sg_tx;
 
-	spin_lock_irq(&atmel_port->lock_tx);
 	/* Make sure we have an idle channel */
-	if (atmel_port->desc_tx != NULL) {
-		spin_lock_irq(&atmel_port->lock_tx);
+	if (atmel_port->desc_tx != NULL)
 		return;
-	}
-	spin_unlock_irq(&atmel_port->lock_tx);
 
 	if (!uart_circ_empty(xmit) && !uart_tx_stopped(port)) {
 		/*
@@ -683,23 +691,10 @@ static void atmel_tx_dma(struct uart_port *port)
 		 * transmit till the end, and then the rest. Take the port lock to get a
 		 * consistent xmit buffer state.
 		 */
-		spin_lock_irq(&port->lock);
-		if (atmel_port->xmit_head != -1) {
-			if (atmel_port->xmit_head != xmit->head) {
-				atmel_port->xmit_head = xmit->head;
-			} else {
-				spin_unlock_irq(&port->lock);
-				return;
-			}
-		} else {
-			atmel_port->xmit_head = xmit->head;
-		}
-
 		sg->offset = xmit->tail & (UART_XMIT_SIZE - 1);
 		sg_dma_address(sg) = (sg_dma_address(sg) & ~(UART_XMIT_SIZE - 1))
 							+ sg->offset;
 		sg_dma_len(sg) = CIRC_CNT_TO_END(xmit->head, xmit->tail, UART_XMIT_SIZE);
-		spin_unlock_irq(&port->lock);
 
 		BUG_ON(!sg_dma_len(sg));
 
@@ -707,22 +702,18 @@ static void atmel_tx_dma(struct uart_port *port)
 				sg, atmel_port->sg_len_tx, DMA_TO_DEVICE,
 				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 		if (!desc) {
-			spin_unlock_irq(&port->lock);
-			printk (KERN_ERR "#### Error! Failed to send via dma!\n");
+			dev_err(port->dev, "Error! Failed to send via dma!\n");
 			return;
 		}
 
 		dma_sync_sg_for_device(port->dev, sg, 1, DMA_TO_DEVICE);
 
-		spin_lock_irq(&port->lock);
 		atmel_port->desc_tx = desc;
 		desc->callback = atmel_dma_tx_complete;
 		desc->callback_param = atmel_port;
-		spin_unlock_irq(&port->lock);
 		atmel_port->cookie_tx = desc->tx_submit(desc);
 		if (atmel_port->cookie_tx < 0) {
 			dev_warn(port->dev, "Failed submitting Tx DMA descriptor\n");
-			/* switch to PIO */
 			atmel_tx_dma_release(atmel_port);
 			return;
 		}
@@ -837,10 +828,8 @@ static void atmel_tx_request_dma(struct atmel_uart_port *atmel_port)
 	port = &(atmel_port->uart);
 	pdata = (struct atmel_uart_data *)port->private_data;
 
-	if (!pdata) {
-		dev_notice(port->dev, "DMA not available, using PIO\n");
-		return;
-	}
+	if (!pdata)
+		goto chan_err;
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
@@ -848,7 +837,11 @@ static void atmel_tx_request_dma(struct atmel_uart_port *atmel_port)
 	if (atmel_use_dma_tx(port) && pdata->dma_tx_slave) {
 		pdata->dma_tx_slave->tx_reg = port->mapbase + ATMEL_US_THR;
 		chan = dma_request_channel(mask, filter, pdata->dma_tx_slave);
-		dev_dbg(port->dev, "%s: TX: got channel %p\n", __func__, chan);
+		if (chan == NULL)
+			goto chan_err;
+		dev_dbg(port->dev, "%s: TX: got channel %d\n",
+			__func__,
+			chan->chan_id);
 	}
 
 	if (chan) {
@@ -876,8 +869,15 @@ static void atmel_tx_request_dma(struct atmel_uart_port *atmel_port)
 				sg_dma_address(&atmel_port->sg_tx));
 
 		atmel_port->sg_len_tx = nent;
-		atmel_port->xmit_head = -1;
 	}
+
+	return;
+
+chan_err:
+	dev_err(port->dev, "TX channel not available, switch to pio\n");
+	atmel_port->use_dma_tx = 0;
+	atmel_tx_dma_release(atmel_port);
+	return;
 }
 
 static void atmel_rx_request_dma(struct atmel_uart_port *atmel_port)
