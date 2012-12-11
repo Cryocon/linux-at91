@@ -1390,15 +1390,10 @@ static int atmel_startup(struct uart_port *port)
 
 			pdc->buf = kmalloc(PDC_BUFFER_SIZE, GFP_KERNEL);
 			if (pdc->buf == NULL) {
-				if (i != 0) {
-					dma_unmap_single(port->dev,
-						atmel_port->pdc_rx[0].dma_addr,
-						PDC_BUFFER_SIZE,
-						DMA_FROM_DEVICE);
-					kfree(atmel_port->pdc_rx[0].buf);
-				}
-				free_irq(port->irq, port);
-				return -ENOMEM;
+				retval = -ENOMEM;
+				if (i != 0)
+					goto err_second_pdc_buffer;
+				goto err_pdc_buffer;
 			}
 			pdc->dma_addr = dma_map_single(port->dev,
 						       pdc->buf,
@@ -1443,10 +1438,8 @@ static int atmel_startup(struct uart_port *port)
 	 */
 	if (atmel_open_hook) {
 		retval = atmel_open_hook(port);
-		if (retval) {
-			free_irq(port->irq, port);
-			return retval;
-		}
+		if (retval)
+			goto err_open_hook;
 	}
 
 	/* Save current CSR for comparison in atmel_tasklet_func() */
@@ -1480,6 +1473,19 @@ static int atmel_startup(struct uart_port *port)
 	}
 
 	return 0;
+
+err_open_hook:
+err_second_pdc_buffer:
+	if (atmel_use_pdc_rx(port)) {
+		dma_unmap_single(port->dev,
+			atmel_port->pdc_rx[0].dma_addr,
+			PDC_BUFFER_SIZE,
+			DMA_FROM_DEVICE);
+		kfree(atmel_port->pdc_rx[0].buf);
+	}
+err_pdc_buffer:
+	free_irq(port->irq, port);
+	return retval;
 }
 
 /*
