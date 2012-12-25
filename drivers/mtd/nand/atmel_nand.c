@@ -87,6 +87,11 @@ struct atmel_nand_host {
 
 	struct completion	comp;
 	struct dma_chan		*dma_chan;
+
+	bool			has_pmecc;
+	u8			pmecc_corr_cap;
+	u16			pmecc_sector_size;
+	u32			pmecc_lookup_table_offset;
 };
 
 static int cpu_has_dma(void)
