@@ -1314,6 +1314,42 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 		nand_chip->dev_ready = atmel_nand_device_ready;
 
 	nand_chip->ecc.mode = host->board->ecc_mode;
+
+	/* Initialize HW ECC parameters */
+	host->has_pmecc = host->board->has_pmecc;
+	host->pmecc_corr_cap = host->board->pmecc_corr_cap;
+	host->pmecc_sector_size = host->board->pmecc_sector_size;
+	host->pmecc_lookup_table_offset =
+		host->board->pmecc_lookup_table_offset;
+
+	/* sanity check for the pmecc parameters */
+	if (nand_chip->ecc.mode == NAND_ECC_HW && host->has_pmecc) {
+		res = 0;
+		if (host->pmecc_corr_cap != 2 && host->pmecc_corr_cap != 4 &&
+				host->pmecc_corr_cap != 8 &&
+				host->pmecc_corr_cap != 12 &&
+				host->pmecc_corr_cap != 24) {
+			dev_err(host->dev, "Invalid PMECC correction bits: %d! Only support 2, 4, 8, 12, 24.\n",
+					host->pmecc_corr_cap);
+			res = -EINVAL;
+		}
+
+		if (host->pmecc_sector_size != 512 &&
+				host->pmecc_sector_size != 1024) {
+			dev_err(host->dev, "Invalid PMECC sector size: %d! Only support 512 and 1024.\n",
+				host->pmecc_sector_size);
+			res = -EINVAL;
+		}
+
+		if (!host->pmecc_lookup_table_offset) {
+			dev_err(host->dev, "Invalid PMECC lookup table offset.\n");
+			res = -EINVAL;
+		}
+
+		if (res == -EINVAL)
+			goto err_bad_pmecc;
+	}
+
 	nand_chip->chip_delay = 20;		/* 20us command delay time */
 
 	if (host->board->bus_width_16)	/* 16-bit bus width */
@@ -1426,6 +1462,7 @@ err_no_card:
 	platform_set_drvdata(pdev, NULL);
 	if (host->dma_chan)
 		dma_release_channel(host->dma_chan);
+err_bad_pmecc:
 	iounmap(host->io_base);
 err_nand_ioremap:
 	kfree(host);

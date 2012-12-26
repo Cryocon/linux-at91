@@ -119,6 +119,10 @@ struct atmel_nand_data {
 	u8		bus_width_16;	/* buswidth is 16 bit */
 	u8		bus_on_d0;	/* pins of data bus are connected to D0~D15 */
 	u8		ecc_mode;	/* can be NAND_ECC_HW/SOFT/NONE */
+	bool		has_pmecc;	/* use pmecc or not */
+	u8		pmecc_corr_cap;	/* pmecc ecc bits, can be 2, 4, 8, 12, 24 */
+	u16		pmecc_sector_size;	/* can be 512 or 1024 */
+	u32		pmecc_lookup_table_offset;	/* offset in ROM */
 	struct mtd_partition* (*partition_info)(int, int*);
 };
 extern void __init at91_add_device_nand(struct atmel_nand_data *data);
