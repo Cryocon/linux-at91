@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/fb.h>
@@ -195,6 +196,11 @@ static struct atmel_nand_data __initdata ek_nand_data = {
 	.cle		= 22,
 	.rdy_pin	= AT91_PIN_PD5,
 	.enable_pin	= AT91_PIN_PD4,
+	.ecc_mode	= NAND_ECC_HW,
+	.has_pmecc	= 1,
+	.pmecc_corr_cap	= 2,
+	.pmecc_sector_size = 512,
+	.pmecc_lookup_table_offset = 0x8000,
 	.partition_info	= nand_partitions,
 	.bus_on_d0 = 1,
 #if defined(CONFIG_MTD_NAND_ATMEL_BUSWIDTH_16)
