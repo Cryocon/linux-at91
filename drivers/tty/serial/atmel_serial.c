@@ -39,6 +39,7 @@
 #include <linux/atmel_pdc.h>
 #include <linux/atmel_serial.h>
 #include <linux/uaccess.h>
+#include <linux/timer.h>
 
 #include <asm/io.h>
 #include <asm/ioctls.h>
@@ -171,6 +172,7 @@ struct atmel_uart_port {
 
 	struct serial_rs485	rs485;		/* rs485 settings */
 	unsigned int		tx_done_mask;
+	struct timer_list	uart_timer;	/* dbgu timer */
 };
 
 static struct atmel_uart_port atmel_ports[ATMEL_MAX_UART];
@@ -1370,6 +1372,15 @@ err_dma:
 	return -EINVAL;
 }
 
+static void atmel_uart_timer_callback(unsigned long data)
+{
+	struct uart_port *port = (void *)data;
+	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+
+	tasklet_schedule(&atmel_port->tasklet);
+	mod_timer(&atmel_port->uart_timer, jiffies + uart_poll_timeout(port));
+}
+
 /*
  * Perform initialization and enable port for reception
  */
@@ -1472,18 +1483,34 @@ static int atmel_startup(struct uart_port *port)
 
 	if (atmel_use_pdc_rx(port)) {
 		/* set UART timeout */
-		UART_PUT_RTOR(port, PDC_RX_TIMEOUT);
-		UART_PUT_CR(port, ATMEL_US_STTTO);
+		if (port->line == 0) {
+			setup_timer(&atmel_port->uart_timer,
+					atmel_uart_timer_callback,
+					(unsigned long)port);
+			mod_timer(&atmel_port->uart_timer,
+					jiffies + uart_poll_timeout(port));
+		} else {
+			UART_PUT_RTOR(port, PDC_RX_TIMEOUT);
+			UART_PUT_CR(port, ATMEL_US_STTTO);
 
-		UART_PUT_IER(port, ATMEL_US_ENDRX | ATMEL_US_TIMEOUT);
-		/* enable PDC controller */
-		UART_PUT_PTCR(port, ATMEL_PDC_RXTEN);
+			UART_PUT_IER(port, ATMEL_US_ENDRX | ATMEL_US_TIMEOUT);
+		}
+			/* enable PDC controller */
+			UART_PUT_PTCR(port, ATMEL_PDC_RXTEN);
 	} else if (atmel_use_dma_rx(port)) {
 		/* set UART timeout */
-		UART_PUT_RTOR(port, PDC_RX_TIMEOUT);
-		UART_PUT_CR(port, ATMEL_US_STTTO);
+		if (port->line == 0) {
+			setup_timer(&atmel_port->uart_timer,
+					atmel_uart_timer_callback,
+					(unsigned long)port);
+			mod_timer(&atmel_port->uart_timer,
+					jiffies + uart_poll_timeout(port));
+		} else {
+			UART_PUT_RTOR(port, PDC_RX_TIMEOUT);
+			UART_PUT_CR(port, ATMEL_US_STTTO);
 
-		UART_PUT_IER(port, ATMEL_US_TIMEOUT);
+			UART_PUT_IER(port, ATMEL_US_TIMEOUT);
+		}
 	} else {
 		/* enable receive only */
 		UART_PUT_IER(port, ATMEL_US_RXRDY);
@@ -1532,6 +1559,9 @@ static void atmel_shutdown(struct uart_port *port)
 					 DMA_FROM_DEVICE);
 			kfree(pdc->buf);
 		}
+
+		if (port->line == 0)
+			del_timer_sync(&atmel_port->uart_timer);
 	}
 	if (atmel_use_pdc_tx(port)) {
 		struct atmel_dma_buffer *pdc = &atmel_port->pdc_tx;
@@ -1542,8 +1572,11 @@ static void atmel_shutdown(struct uart_port *port)
 				 DMA_TO_DEVICE);
 	}
 
-	if (atmel_use_dma_rx(port))
+	if (atmel_use_dma_rx(port)) {
 		atmel_rx_dma_release(atmel_port);
+		if (port->line == 0)
+			del_timer_sync(&atmel_port->uart_timer);
+	}
 	if (atmel_use_dma_tx(port))
 		atmel_tx_dma_release(atmel_port);
 	/*
