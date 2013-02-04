@@ -1388,8 +1388,10 @@ static int atmel_startup(struct uart_port *port)
 {
 	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
 	struct tty_struct *tty = port->state->port.tty;
+	struct atmel_uart_data *pdata;
 	int retval;
 
+	pdata = (struct atmel_uart_data *)port->private_data;
 	/*
 	 * Ensure that no interrupts are enabled otherwise when
 	 * request_irq() is called we could get stuck trying to
@@ -1406,6 +1408,9 @@ static int atmel_startup(struct uart_port *port)
 		printk("atmel_serial: atmel_startup - Can't get irq\n");
 		return retval;
 	}
+
+	atmel_port->use_dma_rx = pdata->use_dma_rx;
+	atmel_port->use_dma_tx = pdata->use_dma_tx;
 
 	/*
 	 * Initialize DMA (if necessary)
