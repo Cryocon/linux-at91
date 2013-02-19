@@ -55,6 +55,10 @@ static void __init ek_map_io(void)
 
 	/* USART0 on ttyS1. (Rx, Tx) */
 	at91_register_uart(AT91SAM9X5_ID_USART0, 1, 0);
+	/* USART1 on ttyS2. (Rx, Tx) */
+	at91_register_uart(AT91SAM9X5_ID_USART1, 2, 0);
+	/* USART2 on ttyS3. (Rx, Tx) */
+	at91_register_uart(AT91SAM9X5_ID_USART2, 3, 0);
 }
 
 /*
