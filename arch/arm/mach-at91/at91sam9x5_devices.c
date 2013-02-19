@@ -1881,6 +1881,53 @@ void __init at91_set_serial_console(unsigned portnr)
 		atmel_default_console_device = at91_usarts[portnr];
 }
 
+static int at91_set_peripheral_id(unsigned int id, unsigned int direction)
+{
+	unsigned int dst, src;
+	switch (id) {
+	case AT91_ID_SYS:     /* DBGU */
+		dst = AT_DMA_ID_DBGU_TX;
+		src = AT_DMA_ID_DBGU_RX;
+		break;
+	case AT91SAM9X5_ID_USART0:
+		dst = AT_DMA_ID_USART0_TX;
+		src = AT_DMA_ID_USART0_RX;
+		break;
+	case AT91SAM9X5_ID_USART1:
+		dst = AT_DMA_ID_USART1_TX;
+		src = AT_DMA_ID_USART1_RX;
+		break;
+	case AT91SAM9X5_ID_USART2:
+		dst = AT_DMA_ID_USART2_TX;
+		src = AT_DMA_ID_USART2_RX;
+		break;
+	case AT91SAM9X5_ID_USART3:
+		dst = AT_DMA_ID_USART3_TX;
+		src = AT_DMA_ID_USART3_RX;
+		break;
+	case AT91SAM9X5_ID_UART0:
+		dst = AT_DMA_ID_UART0_TX;
+		src = AT_DMA_ID_UART0_RX;
+		break;
+	case AT91SAM9X5_ID_UART1:
+		dst = AT_DMA_ID_UART1_TX;
+		src = AT_DMA_ID_UART1_RX;
+		break;
+	default:
+		dst = 0;
+		src = 0;
+		printk(KERN_ERR "usart %d unsupport!\n", id);
+		break;
+	}
+
+	if (direction == AT_DMA_TX)
+		return dst << 4;
+	if (direction == AT_DMA_RX)
+		return src;
+
+	return -EINVAL;
+}
+
 void __init at91_add_device_serial(void)
 {
 	int i;
@@ -1892,24 +1939,54 @@ void __init at91_add_device_serial(void)
 			struct atmel_uart_data *pdata	= at91_usarts[i]->dev.platform_data;
 
 			if (pdata->use_dma_tx) {
-				struct at_dma_slave	*atslave;
-
-				atslave = kzalloc(sizeof(struct at_dma_slave), GFP_KERNEL);
+				struct at_dma_slave	*atslave_tx;
+				int dst;
+				atslave_tx = kzalloc(sizeof(struct at_dma_slave), GFP_KERNEL);
+				dst = at91_set_peripheral_id(peripheral_id,
+								AT_DMA_TX);
 
 				/* DMA slave channel configuration */
 				if (peripheral_id == AT91SAM9X5_ID_USART0
 				    || peripheral_id == AT91SAM9X5_ID_USART1
 				    || peripheral_id == AT91SAM9X5_ID_UART0)
-					atslave->dma_dev = &at_hdmac0_device.dev;
+					atslave_tx->dma_dev = &at_hdmac0_device.dev;
 				else
-					atslave->dma_dev = &at_hdmac1_device.dev;
+					atslave_tx->dma_dev = &at_hdmac1_device.dev;
 
-				atslave->reg_width = DW_DMA_SLAVE_WIDTH_8BIT;
-				atslave->cfg = ATC_FIFOCFG_HALFFIFO
+				atslave_tx->reg_width = DW_DMA_SLAVE_WIDTH_8BIT;
+				atslave_tx->cfg = ATC_FIFOCFG_HALFFIFO
 						| ATC_SRC_H2SEL_SW | ATC_DST_H2SEL_HW
-						| (AT_DMA_ID_USART0_TX << 4); /*ATC_DST_PER(peripheral_id);*/
+						| dst;
+						/*ATC_DST_PER(peripheral_id);*/
 
-				pdata->dma_tx_slave = atslave;
+
+				pdata->dma_tx_slave = atslave_tx;
+			}
+
+			if (pdata->use_dma_rx) {
+				struct at_dma_slave *atslave_rx;
+				int src;
+				atslave_rx = kzalloc(sizeof(struct at_dma_slave),
+					GFP_KERNEL);
+
+				/* DMA slave channel configuration */
+				if (peripheral_id == AT91SAM9X5_ID_USART0
+				    || peripheral_id == AT91SAM9X5_ID_USART1
+				    || peripheral_id == AT91SAM9X5_ID_UART0)
+					atslave_rx->dma_dev = &at_hdmac0_device.dev;
+				else
+					atslave_rx->dma_dev = &at_hdmac1_device.dev;
+
+				atslave_rx->reg_width = DW_DMA_SLAVE_WIDTH_8BIT;
+				src = at91_set_peripheral_id(peripheral_id,
+								AT_DMA_RX);
+				atslave_rx->cfg = ATC_FIFOCFG_ENOUGHSPACE
+						| ATC_SRC_H2SEL_HW
+						| ATC_DST_H2SEL_SW
+						| src;
+						/*ATC_SRC_PER(peripheral_id);*/
+
+				pdata->dma_rx_slave = atslave_rx;
 			}
 #endif
 			platform_device_register(at91_usarts[i]);

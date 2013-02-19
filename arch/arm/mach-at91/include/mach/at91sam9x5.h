@@ -176,4 +176,8 @@
 #define AT_DMA_ID_USART3_TX	14
 #define AT_DMA_ID_USART3_RX	15
 
+/* DMA peripheral_id direction */
+#define AT_DMA_TX      0
+#define AT_DMA_RX      1
+
 #endif
