@@ -160,4 +160,8 @@
 #define AT_DMA_ID_AES_RX	27
 #define AT_DMA_ID_SHA_RX	28
 
+/* DMA peripheral_id direction */
+#define AT_DMA_TX      0
+#define AT_DMA_RX      1
+
 #endif

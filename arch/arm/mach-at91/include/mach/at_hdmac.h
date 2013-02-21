@@ -63,6 +63,8 @@ struct at_dma_slave {
 #define	ATC_SRC_H2SEL		(0x1 <<  9)	/* Source Handshaking Mod */
 #define		ATC_SRC_H2SEL_SW	(0x0 <<  9)
 #define		ATC_SRC_H2SEL_HW	(0x1 <<  9)
+#define		SRC_PER_MSB_MASK	(0x3 <<  10)
+#define		DST_PER_MSB_MASK	(0x3 <<  14)
 #define	ATC_DST_REP		(0x1 << 12)	/* Destination Replay Mod */
 #define	ATC_DST_H2SEL		(0x1 << 13)	/* Destination Handshaking Mod */
 #define		ATC_DST_H2SEL_SW	(0x0 << 13)
