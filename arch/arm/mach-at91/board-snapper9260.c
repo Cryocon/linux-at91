@@ -24,6 +24,7 @@
 
 #include <linux/init.h>
 #include <linux/gpio.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/i2c/pca953x.h>
@@ -113,6 +114,7 @@ static struct atmel_nand_data __initdata snapper9260_nand_data = {
 	.ale		= 21,
 	.cle		= 22,
 	.rdy_pin	= AT91_PIN_PC13,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info	= snapper9260_nand_partition_info,
 	.bus_width_16	= 0,
 };

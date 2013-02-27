@@ -24,6 +24,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/gpio_keys.h>
@@ -116,6 +117,7 @@ static struct atmel_nand_data __initdata cpu9krea_nand_data = {
 	.cle		= 22,
 	.rdy_pin	= AT91_PIN_PC13,
 	.enable_pin	= AT91_PIN_PC14,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.bus_width_16	= 0,
 };
 

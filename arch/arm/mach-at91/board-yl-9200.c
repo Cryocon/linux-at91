@@ -25,6 +25,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
@@ -186,6 +187,7 @@ static struct atmel_nand_data __initdata yl9200_nand_data = {
 	// .det_pin	= ... not connected
 	.rdy_pin	= AT91_PIN_PC14,	/* R/!B (Sheet10) */
 	.enable_pin	= AT91_PIN_PC15,	/* !CE  (Sheet10) */
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info	= nand_partitions,
 };
 

@@ -18,6 +18,7 @@
  */
 
 #include <linux/mm.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/w1-gpio.h>
@@ -90,6 +91,7 @@ static struct atmel_nand_data __initdata nand_data = {
 	.cle		= 22,
 	.rdy_pin	= AT91_PIN_PC13,
 	.enable_pin	= AT91_PIN_PC14,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.bus_width_16	= 0,
 };
 

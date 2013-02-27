@@ -24,6 +24,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
@@ -150,6 +151,7 @@ static struct atmel_nand_data __initdata cam60_nand_data = {
 	// .det_pin	= ... not there
 	.rdy_pin	= AT91_PIN_PA9,
 	.enable_pin	= AT91_PIN_PA7,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info	= nand_partitions,
 };
 

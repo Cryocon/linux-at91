@@ -25,6 +25,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/mtd/physmap.h>
@@ -155,6 +156,7 @@ static struct atmel_nand_data __initdata dk_nand_data = {
 	.det_pin	= AT91_PIN_PB1,
 	.rdy_pin	= AT91_PIN_PC2,
 	// .enable_pin	= ... not there
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info	= nand_partitions,
 };
 

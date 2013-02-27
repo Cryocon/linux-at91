@@ -23,6 +23,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 
 #include <mach/hardware.h>
@@ -111,6 +112,7 @@ static struct atmel_nand_data __initdata kb9202_nand_data = {
 	// .det_pin	= ... not there
 	.rdy_pin	= AT91_PIN_PC29,
 	.enable_pin	= AT91_PIN_PC28,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info	= nand_partitions,
 };
 

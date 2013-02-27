@@ -24,6 +24,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mtd/nand.h>
 #include <linux/platform_device.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/ads7846.h>
@@ -201,6 +202,7 @@ static struct atmel_nand_data __initdata neocore926_nand_data = {
 	.rdy_pin		= AT91_PIN_PB19,
 	.rdy_pin_active_low	= 1,
 	.enable_pin		= AT91_PIN_PD15,
+	.ecc_mode	= NAND_ECC_SOFT,
 	.partition_info		= nand_partitions,
 };
 
