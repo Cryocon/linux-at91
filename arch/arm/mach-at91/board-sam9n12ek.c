@@ -282,7 +282,7 @@ static struct atmel_lcdfb_info __initdata ek_lcdc_data = {
 	.alpha_enabled			= false,
 	.pixel_clock_polarity		= 0,
 	.pwm_clock_select		= LCDC_LCDCFG0_CLKPWMSEL,
-	.pwm_clock_prescaler		= LCDC_LCDCFG6_PWMPS_DIV_64,
+	.pwm_clock_prescaler		= LCDC_LCDCFG6_PWMPS_DIV_1,
 	.pwm_polarity			= LCDC_LCDCFG6_PWMPOL,
 	.default_bpp			= 16,
 	/* For 32bpp */
