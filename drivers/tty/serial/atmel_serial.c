@@ -173,6 +173,7 @@ struct atmel_uart_port {
 	struct serial_rs485	rs485;		/* rs485 settings */
 	unsigned int		tx_done_mask;
 	struct timer_list	uart_timer;	/* dbgu timer */
+	unsigned int		status;
 };
 
 static struct atmel_uart_port atmel_ports[ATMEL_MAX_UART];
@@ -509,24 +510,29 @@ atmel_buffer_rx_char(struct uart_port *port, unsigned int status,
 }
 
 /*
- * Deal with parity, framing and overrun errors.
+ * Enable or disable rx break.
  */
-static void atmel_pdc_rxerr(struct uart_port *port, unsigned int status)
+static void atmel_rxbrk(struct uart_port *port)
 {
-	/* clear error */
-	UART_PUT_CR(port, ATMEL_US_RSTSTA);
+	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+	unsigned int status = atmel_port->status;
 
-	if (status & ATMEL_US_RXBRK) {
-		/* ignore side-effect */
-		status &= ~(ATMEL_US_PARE | ATMEL_US_FRAME);
-		port->icount.brk++;
+	if (status & ATMEL_US_RXBRK
+		&& !atmel_port->break_active) {
+		atmel_port->break_active = 1;
+		UART_PUT_IER(port, ATMEL_US_RXBRK);
+	} else {
+		/*
+		 * This is either the end-of-break
+		 * condition or we've received at
+		 * least one character without RXBRK
+		 * being set. In both cases, the next
+		 * RXBRK will indicate start-of-break.
+		 */
+		UART_PUT_IDR(port, ATMEL_US_RXBRK);
+		atmel_port->status &= ~ATMEL_US_RXBRK;
+		atmel_port->break_active = 0;
 	}
-	if (status & ATMEL_US_PARE)
-		port->icount.parity++;
-	if (status & ATMEL_US_FRAME)
-		port->icount.frame++;
-	if (status & ATMEL_US_OVRE)
-		port->icount.overrun++;
 }
 
 /*
@@ -809,6 +815,34 @@ static void atmel_rx_from_dma(struct uart_port *port)
 	 */
 	if (pending > ring->head) {
 		count = pending - ring->head;
+		/*
+		 * note that the error handling code is
+		 * out of the main execution path
+		 */
+		if (unlikely(atmel_port->status & (ATMEL_US_PARE
+					| ATMEL_US_FRAME
+					| ATMEL_US_OVRE
+					| ATMEL_US_RXBRK))) {
+			if (atmel_port->status & ATMEL_US_RXBRK) {
+				/* ignore side-effect */
+				atmel_port->status &= ~(ATMEL_US_PARE
+							| ATMEL_US_FRAME);
+
+				port->icount.brk++;
+				if (uart_handle_break(port)) {
+					ring->head += count;
+					if (ring->head == sg_dma_len(&atmel_port->sg_rx))
+						ring->head = 0;
+					goto out;
+				}
+			}
+			if (atmel_port->status & ATMEL_US_PARE)
+				port->icount.parity++;
+			if (atmel_port->status & ATMEL_US_FRAME)
+				port->icount.frame++;
+			if (atmel_port->status & ATMEL_US_OVRE)
+				port->icount.overrun++;
+		}
 
 		atmel_rx_dma_flip_buffer(port, ring->buf + ring->head, count);
 
@@ -819,6 +853,7 @@ static void atmel_rx_from_dma(struct uart_port *port)
 		port->icount.rx += count;
 	}
 
+out:
 	UART_PUT_IER(port, ATMEL_US_TIMEOUT);
 }
 
@@ -993,30 +1028,41 @@ atmel_handle_receive(struct uart_port *port, unsigned int pending)
 		/*
 		 * PDC receive. Just schedule the tasklet and let it
 		 * figure out the details.
-		 *
-		 * TODO: We're not handling error flags correctly at
-		 * the moment.
 		 */
+		atmel_port->status = UART_GET_CSR(port);
+		if (unlikely(atmel_port->status & (ATMEL_US_PARE
+				| ATMEL_US_FRAME
+				| ATMEL_US_OVRE
+				| ATMEL_US_RXBRK)
+				|| atmel_port->break_active)) {
+			/* clear error */
+			UART_PUT_CR(port, ATMEL_US_RSTSTA);
+			atmel_rxbrk(port);
+		}
+
 		if (pending & (ATMEL_US_ENDRX | ATMEL_US_TIMEOUT)) {
 			UART_PUT_IDR(port, (ATMEL_US_ENDRX
 						| ATMEL_US_TIMEOUT));
 			tasklet_schedule(&atmel_port->tasklet);
 		}
-
-		if (pending & (ATMEL_US_RXBRK | ATMEL_US_OVRE |
-				ATMEL_US_FRAME | ATMEL_US_PARE))
-			atmel_pdc_rxerr(port, pending);
 	}
 
 	if (atmel_use_dma_rx(port)) {
+		atmel_port->status = UART_GET_CSR(port);
+		if (unlikely(atmel_port->status & (ATMEL_US_PARE
+				| ATMEL_US_FRAME
+				| ATMEL_US_OVRE
+				| ATMEL_US_RXBRK)
+				|| atmel_port->break_active)) {
+			/* clear error */
+			UART_PUT_CR(port, ATMEL_US_RSTSTA);
+			atmel_rxbrk(port);
+		}
+
 		if (pending & ATMEL_US_TIMEOUT) {
 			UART_PUT_IDR(port, ATMEL_US_TIMEOUT);
 			tasklet_schedule(&atmel_port->tasklet);
-	}
-
-		if (pending & (ATMEL_US_RXBRK | ATMEL_US_OVRE |
-				ATMEL_US_FRAME | ATMEL_US_PARE))
-			atmel_pdc_rxerr(port, pending);
+		}
 	}
 
 	/* Interrupt receive */
@@ -1234,6 +1280,41 @@ static void atmel_rx_from_pdc(struct uart_port *port)
 		 * all interrupts below.
 		 */
 		head = min(head, pdc->dma_size);
+
+		/*
+		 * note that the error handling code is
+		 * out of the main execution path
+		 */
+		if (unlikely(atmel_port->status & (ATMEL_US_PARE
+					| ATMEL_US_FRAME
+					| ATMEL_US_OVRE
+					| ATMEL_US_RXBRK))) {
+			if (atmel_port->status & ATMEL_US_RXBRK) {
+				/* ignore side-effect */
+				atmel_port->status &= ~(ATMEL_US_PARE
+							| ATMEL_US_FRAME);
+
+				port->icount.brk++;
+				if (uart_handle_break(port)) {
+					pdc->ofs = head;
+					if (head >= pdc->dma_size) {
+						pdc->ofs = 0;
+						UART_PUT_RNPR(port, pdc->dma_addr);
+						UART_PUT_RNCR(port, pdc->dma_size);
+
+						rx_idx = !rx_idx;
+						atmel_port->pdc_rx_idx = rx_idx;
+					}
+					continue;
+				}
+			}
+			if (atmel_port->status & ATMEL_US_PARE)
+				port->icount.parity++;
+			if (atmel_port->status & ATMEL_US_FRAME)
+				port->icount.frame++;
+			if (atmel_port->status & ATMEL_US_OVRE)
+				port->icount.overrun++;
+		}
 
 		if (likely(head != tail)) {
 			dma_sync_single_for_cpu(port->dev, pdc->dma_addr,
