@@ -176,6 +176,8 @@ struct atmel_uart_port {
 	struct timer_list	uart_timer;	/* dbgu timer */
 	unsigned int		status;
 	bool			is_usart;	/* usart or uart */
+	short			cts;		/* use hw cts */
+	short			rts;		/* use hw rts */
 };
 
 static struct atmel_uart_port atmel_ports[ATMEL_MAX_UART];
@@ -471,8 +473,11 @@ static void atmel_stop_rx(struct uart_port *port)
  */
 static void atmel_enable_ms(struct uart_port *port)
 {
+	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
+	if (atmel_port->cts)
+		UART_PUT_IER(port, ATMEL_US_CTSIC);
 	UART_PUT_IER(port, ATMEL_US_RIIC | ATMEL_US_DSRIC
-			| ATMEL_US_DCDIC | ATMEL_US_CTSIC);
+			| ATMEL_US_DCDIC);
 }
 
 /*
@@ -2124,6 +2129,8 @@ static void __devinit atmel_init_port(struct atmel_uart_port *atmel_port,
 
 	atmel_port->use_dma_rx = data->use_dma_rx;
 	atmel_port->use_dma_tx = data->use_dma_tx;
+	atmel_port->cts		= data->cts;
+	atmel_port->rts		= data->rts;
 	atmel_port->rs485	= data->rs485;
 	/* Use TXEMPTY for interrupt when rs485 else TXRDY or ENDTX|TXBUFE */
 	if (atmel_port->rs485.flags & SER_RS485_ENABLED)

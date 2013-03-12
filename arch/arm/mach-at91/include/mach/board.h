@@ -154,6 +154,8 @@ extern struct platform_device *atmel_default_console_device;
 struct atmel_uart_data {
 	short			use_dma_tx;	/* use transmit DMA? */
 	short			use_dma_rx;	/* use receive DMA? */
+	short			cts;		/* use cts */
+	short			rts;		/* use rts */
 	void __iomem		*regs;		/* virt. base address, if any */
 	struct at_dma_slave	*dma_tx_slave;
 	struct at_dma_slave	*dma_rx_slave;

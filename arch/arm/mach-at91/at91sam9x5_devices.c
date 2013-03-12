@@ -1829,6 +1829,7 @@ struct platform_device *atmel_default_console_device;	/* the serial console devi
 void __init at91_register_uart(unsigned id, unsigned portnr, unsigned pins)
 {
 	struct platform_device *pdev;
+	struct atmel_uart_data *pdata;
 
 	switch (id) {
 		case 0:		/* DBGU */
@@ -1873,6 +1874,18 @@ void __init at91_register_uart(unsigned id, unsigned portnr, unsigned pins)
 
 	if (portnr < ATMEL_MAX_UART)
 		at91_usarts[portnr] = pdev;
+
+	if (pdev) {
+		pdata = pdev->dev.platform_data;
+		if (pins & ATMEL_UART_RTS)
+			pdata->rts = 1;
+		else
+			pdata->rts = 0;
+		if (pins & ATMEL_UART_CTS)
+			pdata->cts = 1;
+		else
+			pdata->cts = 0;
+	}
 }
 
 void __init at91_set_serial_console(unsigned portnr)
