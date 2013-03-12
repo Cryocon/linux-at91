@@ -476,8 +476,12 @@ static void atmel_enable_ms(struct uart_port *port)
 	struct atmel_uart_port *atmel_port = to_atmel_uart_port(port);
 	if (atmel_port->cts)
 		UART_PUT_IER(port, ATMEL_US_CTSIC);
-	UART_PUT_IER(port, ATMEL_US_RIIC | ATMEL_US_DSRIC
-			| ATMEL_US_DCDIC);
+#ifdef CONFIG_ARCH_AT91RM9200
+	if (cpu_is_at91rm9200()) {
+		UART_PUT_IER(port, ATMEL_US_RIIC | ATMEL_US_DSRIC
+				| ATMEL_US_DCDIC);
+	}
+#endif
 }
 
 /*
