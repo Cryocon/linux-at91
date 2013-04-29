@@ -147,7 +147,7 @@ static struct gpio_led cm_leds[] = {
  */
 static struct i2c_board_info __initdata cm_i2c_devices[] = {
 	{
-		I2C_BOARD_INFO("24c512", 0x50)
+		I2C_BOARD_INFO("24c512", 0x51)
 	},
 };
 
