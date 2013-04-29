@@ -83,47 +83,51 @@ void __init cm_init_irq(void)
 /*
  * SPI devices.
  */
-
-/* det_pin is not connected */
-static struct atmel_nand_data __initdata cm_nand_data = {
-	.ale		= 21,
-	.cle		= 22,
-	.enable_pin	= AT91_PIN_PD4,
-#if defined(CONFIG_MTD_NAND_AT91_BUSWIDTH_16)
-	.bus_width_16	= 1,
-#endif
+static struct mtd_partition cm_spi_flash_parts[] = {
+	{
+		.name = "full",
+		.offset = 0,
+		.size = MTDPART_SIZ_FULL,
+	},
+	{
+		.name = "little",
+		.offset = 0,
+		.size = 24 * SZ_1K,
+	},
+	{
+		.name = "remaining",
+		.offset = MTDPART_OFS_NXTBLK,
+		.size = MTDPART_SIZ_FULL,
+	},
 };
 
-static struct sam9_smc_config __initdata cm_nand_smc_config = {
-	.ncs_read_setup		= 0,
-	.nrd_setup		= 1,
-	.ncs_write_setup	= 0,
-	.nwe_setup		= 1,
-
-	.ncs_read_pulse		= 6,
-	.nrd_pulse		= 4,
-	.ncs_write_pulse	= 5,
-	.nwe_pulse		= 3,
-
-	.read_cycle		= 6,
-	.write_cycle		= 5,
-
-	.mode			= AT91_SMC_READMODE | AT91_SMC_WRITEMODE | AT91_SMC_EXNWMODE_DISABLE,
-	.tdf_cycles		= 1,
+static const struct flash_platform_data cm_spi_flash_data = {
+		/*.type           = "sst25vf032b",*/
+		.name           = "spi_flash",
+		.parts		= cm_spi_flash_parts,
+		.nr_parts	= ARRAY_SIZE(cm_spi_flash_parts),
 };
 
-static void __init cm_add_device_nand(void)
-{
-	cm_nand_smc_config.mode |= AT91_SMC_DBW_8;
+static struct spi_board_info cm_spi_devices[] = {
+	{	/* serial flash chip */
+		.modalias	= "m25p80",
+		.chip_select	= 0,
+		.max_speed_hz	= 15 * 1000 * 1000,
+		.bus_num	= 0,
+		.mode		= SPI_MODE_0,
+		.platform_data  = &cm_spi_flash_data,
+		.irq            = -1,
+	},
+	{	/* Generic SPI device for testing */
+		.modalias	= "spidev",
+		.chip_select	= 0,
+		.max_speed_hz	= 15 * 1000 * 1000,
+		.bus_num	= 1,
+		.mode		= SPI_MODE_0,
+		.irq            = -1,
+	},
+};
 
-	cm_nand_data.bus_on_d0 = 0;
-	cm_nand_data.rdy_pin = AT91_PIN_PD5;
-
-	/* configure chip-select 3 (NAND) */
-	sam9_smc_configure(3, &cm_nand_smc_config);
-
-	at91_add_device_nand(&cm_nand_data);
-}
 
 /*
  * LEDs
@@ -154,8 +158,6 @@ static struct i2c_board_info __initdata cm_i2c_devices[] = {
 void __init cm_board_init(u32 *cm_config)
 {
 	*cm_config = 0;
-	/* NAND */
-	cm_add_device_nand();
 	/* I2C */
 	at91_add_device_i2c(0, cm_i2c_devices, ARRAY_SIZE(cm_i2c_devices));
 	*cm_config |= CM_CONFIG_I2C0_ENABLE;
@@ -206,27 +208,12 @@ static struct at91_eth_data __initdata ek_macb0_data = {
 	.is_rmii	= 1,
 };
 
-static struct at91_eth_data __initdata ek_macb1_data = {
-	.phy_irq_pin	= AT91_PIN_PC26,
-	.is_rmii	= 1,
-};
-
-
 /*
  * MCI (SD/MMC)
  */
-/* mci0 detect_pin is revision dependent */
 static struct mci_platform_data __initdata mci0_data = {
 	.slot[0] = {
 		.bus_width	= 4,
-		.wp_pin		= -1,
-	},
-};
-
-static struct mci_platform_data __initdata mci1_data = {
-	.slot[0] = {
-		.bus_width	= 4,
-		.detect_pin	= AT91_PIN_PD14,
 		.wp_pin		= -1,
 	},
 };
@@ -363,7 +350,6 @@ static void __init at91_usb_adb_init(void){
 /*
  * LCD Controller
  */
-#if defined(CONFIG_FB_ATMEL) || defined(CONFIG_FB_ATMEL_MODULE)
 static struct fb_videomode at91_tft_vga_modes[] = {
 	{
 		.name           = "LG",
@@ -409,10 +395,6 @@ static struct atmel_lcdfb_info __initdata ek_lcdc_data = {
 	.lcd_wiring_mode		= ATMEL_LCDC_WIRING_RGB,
 };
 
-#else
-static struct atmel_lcdfb_info __initdata ek_lcdc_data;
-#endif
-
 /*
  * Touchscreen
  */
@@ -429,15 +411,10 @@ static struct at91_tsadcc_data ek_tsadcc_data = {
  */
 static struct i2c_board_info __initdata ek_i2c_devices[] = {
 	{
-		I2C_BOARD_INFO("wm8731", 0x1a)
-	},
-#if defined(CONFIG_KEYBOARD_QT1070)
-	{
 		I2C_BOARD_INFO("qt1070", 0x1b),
 		.irq = AT91_PIN_PA7,
 		.flags = I2C_CLIENT_WAKE,
 	},
-#endif
 };
 
 static void __init ek_board_configure_pins(void)
@@ -456,11 +433,7 @@ static void __init ek_board_configure_pins(void)
 
 	mci0_data.slot[0].detect_pin = AT91_PIN_PD15;
 
-#if defined(CONFIG_KEYBOARD_QT1070)
-		if (!cpu_is_at91sam9g25())
-			/* conflict with ISI */
-			at91_set_gpio_input(ek_i2c_devices[1].irq, 1);
-#endif
+	at91_set_gpio_input(ek_i2c_devices[0].irq, 1);
 }
 
 /*
@@ -491,12 +464,10 @@ static void __init ek_board_init(void)
 	at91_add_device_usba(&ek_usba_udc_data);
 	/* Ethernet */
 	at91_add_device_eth(0, &ek_macb0_data);
-	at91_add_device_eth(1, &ek_macb1_data);
 	/* MMC */
 	at91_add_device_mci(0, &mci0_data);
-	/* Conflict between SPI0 and MCI1 pins */
-	if (!(cm_config & CM_CONFIG_SPI0_ENABLE))
-		at91_add_device_mci(1, &mci1_data);
+	/* SPI */
+	at91_add_device_spi(cm_spi_devices, ARRAY_SIZE(cm_spi_devices));
 	/* I2C */
 	if (cm_config & CM_CONFIG_I2C0_ENABLE)
 		i2c_register_board_info(0,
@@ -510,9 +481,6 @@ static void __init ek_board_init(void)
 	at91_add_device_lcdc(&ek_lcdc_data);
 	/* Touch Screen */
 	at91_add_device_tsadcc(&ek_tsadcc_data);
-
-	/* SSC (for WM8731) */
-	at91_add_device_ssc(AT91SAM9X5_ID_SSC, ATMEL_SSC_TX | ATMEL_SSC_RX);
 
 	at91_init_battery();
 
