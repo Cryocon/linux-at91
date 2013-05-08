@@ -308,23 +308,15 @@ static void __init at91_usb_adb_init(void){
 	platform_device_register(&usb_mass_storage_device);
 }
 
-static void __init m18_board_configure_pins(void)
-{
-	m18_usba_udc_data.vbus_pin = AT91_PIN_PB16;
-
-	m18_macb0_data.phy_irq_pin = AT91_PIN_PB8;
-
-	at91_set_gpio_input(m18_i2c_devices[0].irq, 1);
-}
-
 static void __init m18_board_init(void)
 {
 	/* I2C */
 	at91_add_device_i2c(0, m18_i2c_devices, ARRAY_SIZE(m18_i2c_devices));
 	/* LEDs */
 	at91_gpio_leds(m18_leds, ARRAY_SIZE(m18_leds));
-
-	m18_board_configure_pins();
+	/* Pins */
+	m18_usba_udc_data.vbus_pin = AT91_PIN_PB16;
+	m18_macb0_data.phy_irq_pin = AT91_PIN_PB8;
 	/* Serial */
 	at91_add_device_serial();
 	/* USB HS Host */
