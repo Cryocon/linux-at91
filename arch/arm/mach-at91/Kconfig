@@ -503,6 +503,29 @@ config MACH_CRYOCON9G35EK
 	select MACB
 	select DAVICOM_PHY
 
+config MACH_M18
+	bool "CryoCon Model 18 with sam9g35"
+	select PREEMPT
+	select AT_HDMAC
+	select USB_OHCI_HCD
+	select USB_ECHI_HCD
+	select RTC_DRV_AT91RM9200
+	select I2C
+	select I2C_CHARDEV
+	select I2C_GPIO
+	select SPI
+	select SPI_ATMEL
+	select SPI_SPIDEV
+	select GPIO_SYSFS
+	select MMC_ATMELMCI
+	select MMC_ATMELMCI_DMA
+	select SERIAL_ATMEL
+	select SERIAL_ATMEL_CONSOLE
+	select SERIAL_ATMEL_DMA
+	select MII
+	select MACB
+	select MICREL_PHY
+
 endif
 
 # ----------------------------------------------------------
