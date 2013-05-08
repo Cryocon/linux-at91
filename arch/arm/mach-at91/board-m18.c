@@ -129,6 +129,67 @@ static struct gpio_led m18_leds[] = {
 };
 
 /*
+ * GPIO Buttons
+ */
+static struct gpio_keys_button m18_buttons[] = {
+	{	/* KBUpn */
+		.code		= KEY_UP,
+		.gpio		= AT91_PIN_PB16,
+		.active_low	= 1,
+		.desc		= "up",
+		.wakeup		= 1,
+	},
+	{	/* KBDown */
+		.code		= KEY_DOWN,
+		.gpio		= AT91_PIN_PB17,
+		.active_low	= 1,
+		.desc		= "down",
+		.wakeup		= 1,
+	},
+	{	/* KBRightn */
+		.code		= KEY_RIGHT,
+		.gpio		= AT91_PIN_PD19,
+		.active_low	= 1,
+		.desc		= "right",
+		.wakeup		= 1,
+	},
+	{	/* KBSelectn */
+		.code		= KEY_SELECT,
+		.gpio		= AT91_PIN_PD20,
+		.active_low	= 1,
+		.desc		= "select",
+		.wakeup		= 1,
+	},
+};
+
+static struct gpio_keys_platform_data m18_button_data = {
+	.buttons	= m18_buttons,
+	.nbuttons	= ARRAY_SIZE(m18_buttons),
+};
+
+static struct platform_device m18_button_device = {
+	.name		= "gpio-keys",
+	.id		= -1,
+	.num_resources	= 0,
+	.dev		= {
+		.platform_data	= &m18_button_data,
+	}
+};
+
+static void __init m18_add_device_buttons(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(m18_buttons); i++) {
+		at91_set_pulldown(m18_buttons[i].gpio, 0);
+		at91_set_gpio_input(m18_buttons[i].gpio, 1);
+		at91_set_deglitch(m18_buttons[i].gpio, 1);
+	}
+
+	platform_device_register(&m18_button_device);
+}
+
+/*
  * I2C Devices
  */
 static struct i2c_board_info __initdata m18_i2c_devices[] = {
@@ -330,6 +391,8 @@ static void __init m18_board_init(void)
 	at91_add_device_mci(0, &mci0_data);
 	/* SPI */
 	at91_add_device_spi(m18_spi_devices, ARRAY_SIZE(m18_spi_devices));
+	/* Buttons */
+	m18_add_device_buttons();
 
 	printk(KERN_CRIT "AT91: Cryocon M18\n");
 
