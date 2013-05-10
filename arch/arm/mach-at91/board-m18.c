@@ -134,28 +134,28 @@ static struct gpio_led m18_leds[] = {
 static struct gpio_keys_button m18_buttons[] = {
 	{	/* KBUpn */
 		.code		= KEY_UP,
-		.gpio		= AT91_PIN_PB16,
+		.gpio		= AT91_PIN_PD18,
 		.active_low	= 1,
 		.desc		= "up",
 		.wakeup		= 1,
 	},
 	{	/* KBDown */
 		.code		= KEY_DOWN,
-		.gpio		= AT91_PIN_PB17,
+		.gpio		= AT91_PIN_PD19,
 		.active_low	= 1,
 		.desc		= "down",
 		.wakeup		= 1,
 	},
 	{	/* KBRightn */
 		.code		= KEY_RIGHT,
-		.gpio		= AT91_PIN_PD19,
+		.gpio		= AT91_PIN_PD20,
 		.active_low	= 1,
 		.desc		= "right",
 		.wakeup		= 1,
 	},
 	{	/* KBSelectn */
 		.code		= KEY_SELECT,
-		.gpio		= AT91_PIN_PD20,
+		.gpio		= AT91_PIN_PD21,
 		.active_low	= 1,
 		.desc		= "select",
 		.wakeup		= 1,
