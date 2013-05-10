@@ -62,7 +62,7 @@
 
 /* AT42QT1070 support up to 7 keys */
 static const unsigned short qt1070_key2code[] = {
-	KEY_BACK, KEY_HOME, KEY_MENU, KEY_POWER,
+	KEY_UP, KEY_DOWN, KEY_RIGHT, KEY_SELECT,
 	KEY_4, KEY_5, KEY_6,
 };
 
