@@ -166,6 +166,7 @@ static struct usba_platform_data __initdata m18_usba_udc_data;
  */
 static struct at91_eth_data __initdata m18_macb0_data = {
 	.is_rmii	= 1,
+	.phy_irq_pin = AT91_PIN_PB8,
 };
 
 /*
@@ -316,7 +317,6 @@ static void __init m18_board_init(void)
 	at91_gpio_leds(m18_leds, ARRAY_SIZE(m18_leds));
 	/* Pins */
 	m18_usba_udc_data.vbus_pin = AT91_PIN_PB16;
-	m18_macb0_data.phy_irq_pin = AT91_PIN_PB8;
 	/* Serial */
 	at91_add_device_serial();
 	/* USB HS Host */
