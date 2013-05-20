@@ -239,7 +239,6 @@ static struct usba_platform_data __initdata m18_usba_udc_data;
  */
 static struct at91_eth_data __initdata m18_macb0_data = {
 	.is_rmii	= 1,
-	.phy_irq_pin = AT91_PIN_PB8,
 };
 
 /*
@@ -249,7 +248,6 @@ static struct mci_platform_data __initdata mci0_data = {
 	.slot[0] = {
 		.bus_width	= 4,
 		.wp_pin		= -1,
-		.detect_pin	= -1
 	},
 };
 
