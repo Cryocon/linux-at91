@@ -80,22 +80,7 @@ static struct spi_board_info m18_spi_devices[] = {
 		.max_speed_hz	= 1000 * 1000,
 		.mode		= SPI_MODE_0,
 		.irq            = -1,
-	},
-	{
-		.bus_num	= 0,
-		.chip_select	= 1,
-		.modalias	= "spidev",
-		.max_speed_hz	= 1000 * 1000,
-		.mode		= SPI_MODE_0,
-		.irq            = -1,
-	},
-	{
-		.bus_num	= 0,
-		.chip_select	= 2,
-		.modalias	= "spidev",
-		.max_speed_hz	= 1000 * 1000,
-		.mode		= SPI_MODE_0,
-		.irq            = -1,
+		.controller_data = AT91_PIN_PD17,
 	},
 	{
 		.bus_num	= 1,
@@ -392,6 +377,9 @@ static void __init m18_board_init(void)
 	/* MMC */
 	at91_add_device_mci(0, &mci0_data);
 	/* SPI */
+	at91_set_gpio_output(AT91_PIN_PA1, 0);
+	at91_set_gpio_output(AT91_PIN_PA14, 1);
+	at91_set_gpio_output(AT91_PIN_PA7, 1);
 	at91_add_device_spi(m18_spi_devices, ARRAY_SIZE(m18_spi_devices));
 	/* Buttons */
 	m18_add_device_buttons();
