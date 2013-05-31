@@ -380,6 +380,10 @@ static void __init m18_board_init(void)
 	at91_set_gpio_output(AT91_PIN_PA1, 0);
 	at91_set_gpio_output(AT91_PIN_PA14, 1);
 	at91_set_gpio_output(AT91_PIN_PA7, 1);
+	at91_set_gpio_output(AT91_PIN_PA0, 1);
+	at91_set_gpio_output(AT91_PIN_PD17, 1);
+	at91_set_gpio_output(AT91_PIN_PA25, 1);
+	at91_set_gpio_input(AT91_PIN_PB18, 0);
 	at91_add_device_spi(m18_spi_devices, ARRAY_SIZE(m18_spi_devices));
 	/* Buttons */
 	m18_add_device_buttons();
