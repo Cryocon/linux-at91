@@ -87,7 +87,7 @@ static struct spi_board_info m18_spi_devices[] = {
 		.chip_select	= 0,
 		.modalias	= "spidev",
 		.max_speed_hz	= 3 * 1000 * 1000,
-		.mode		= SPI_MODE_0,
+		.mode		= SPI_MODE_1,
 		.irq            = -1,
 	},
 };
