@@ -80,7 +80,7 @@ static struct spi_board_info m18_spi_devices[] = {
 		.max_speed_hz	= 1000 * 1000,
 		.mode		= SPI_MODE_0,
 		.irq            = -1,
-		.controller_data = AT91_PIN_PD17,
+		.controller_data = AT91_PIN_PD7,
 	},
 	{
 		.bus_num	= 1,
