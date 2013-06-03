@@ -170,6 +170,13 @@ static void __init m18_add_device_buttons(void)
  * I2C Devices
  */
 static struct i2c_board_info __initdata m18_i2c_devices[] = {
+#if defined(CONFIG_KEYBOARD_QT1070)
+	{
+		I2C_BOARD_INFO("qt1070", 0x1b),
+		.irq = AT91_PIN_PA7,
+		.flags = I2C_CLIENT_WAKE,
+	},
+#endif
 	{
 		I2C_BOARD_INFO("24c512", 0x50)
 	},
@@ -379,7 +386,13 @@ static void __init m18_board_init(void)
 	/* SPI */
 	at91_set_gpio_output(AT91_PIN_PA1, 0);
 	at91_set_gpio_output(AT91_PIN_PA14, 1);
+#ifndef CONFIG_KEYBOARD_QT1070
 	at91_set_gpio_output(AT91_PIN_PA7, 1);
+#else
+	gpio_request_one(m18_i2c_devices[0].irq, GPIOF_IN, "QT1070 IRQ");
+	at91_set_gpio_input(m18_i2c_devices[0].irq, 1);
+#warning Pin PA7 dedicated to QT1070 IRQ, SPI0 CS1 disabled!
+#endif
 	at91_set_gpio_output(AT91_PIN_PA0, 1);
 	at91_set_gpio_output(AT91_PIN_PD17, 1);
 	at91_set_gpio_output(AT91_PIN_PA25, 1);

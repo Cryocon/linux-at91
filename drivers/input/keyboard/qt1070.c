@@ -62,7 +62,13 @@
 
 /* AT42QT1070 support up to 7 keys */
 static const unsigned short qt1070_key2code[] = {
-	KEY_UP, KEY_DOWN, KEY_RIGHT, KEY_SELECT,
+#if defined(CONFIG_MACH_M18)
+		KEY_SELECT, KEY_RIGHT, KEY_DOWN, KEY_UP,	// rotated to be on right
+#elif defined(CONFIG_ARCH_AT91SAM9X5) && defined(CONFIG_ANDROID)
+	KEY_BACK, KEY_HOME, KEY_MENU, KEY_POWER,
+#else
+	KEY_0, KEY_1, KEY_2, KEY_3,
+#endif
 	KEY_4, KEY_5, KEY_6,
 };
 
