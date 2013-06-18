@@ -12,11 +12,11 @@
  *
  */
 
-
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/fb.h>
 #include <linux/gpio_keys.h>
+#include <linux/i2c/at24.h>
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/leds.h>
@@ -171,6 +171,38 @@ static void __init m18_add_device_buttons(void)
 /*
  * I2C Devices
  */
+
+
+/*
+ * MACB Ethernet devices
+ */
+static struct at91_eth_data __initdata m18_macb0_data = {
+	.is_rmii	= 1,
+};
+
+void m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
+{
+	char *mac_addr = m18_macb0_data.mac_addr;
+	off_t offset = (off_t)context;
+
+	/* Read MAC addr from EEPROM */
+	int bytes = mem_acc->read(mem_acc, mac_addr, offset, ETH_ALEN);
+	if (bytes == ETH_ALEN) {
+		pr_info("Read MAC addr from EEPROM: %pM\n", mac_addr);
+	} else {
+		pr_warning("Failed to read MAC addr from EEPROM: %d\n", bytes);
+	}
+}
+
+static struct at24_platform_data eeprom_info = {
+	.byte_len	= SZ_512K / 8,
+	.page_size	= 128,
+	.flags		= AT24_FLAG_ADDR16,
+	.setup      = m18_get_mac_addr,
+	.context	= (void *)0,
+};
+
+
 static struct i2c_board_info __initdata m18_i2c_devices[] = {
 #if defined(CONFIG_KEYBOARD_QT1070)
 	{
@@ -180,10 +212,12 @@ static struct i2c_board_info __initdata m18_i2c_devices[] = {
 	},
 #endif
 	{
-		I2C_BOARD_INFO("24c512", 0x50)
+		I2C_BOARD_INFO("24c512", 0x50),
+		.platform_data=&eeprom_info,
 	},
 	{
-		I2C_BOARD_INFO("24c512", 0x51)
+		I2C_BOARD_INFO("24c512", 0x51),
+		.platform_data=&eeprom_info,
 	},
 	{
 		I2C_BOARD_INFO("lm73",0x48)
@@ -218,14 +252,6 @@ static struct at91_usbh_data __initdata m18_usbh_hs_data = {
  * USB HS Device port
  */
 static struct usba_platform_data __initdata m18_usba_udc_data;
-
-
-/*
- * MACB Ethernet devices
- */
-static struct at91_eth_data __initdata m18_macb0_data = {
-	.is_rmii	= 1,
-};
 
 /*
  * MCI (SD/MMC)

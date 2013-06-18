@@ -83,7 +83,7 @@ static void __init macb_get_hwaddr(struct macb *bp)
 	if (is_valid_ether_addr(addr)) {
 		memcpy(bp->dev->dev_addr, addr, sizeof(addr));
 	} else {
-		dev_info(&bp->pdev->dev, "invalid hw address, using random\n");
+		dev_info(&bp->pdev->dev, "invalid hw address %pM, using random\n", addr);
 		random_ether_addr(bp->dev->dev_addr);
 	}
 }
@@ -1198,8 +1198,10 @@ static int __init macb_probe(struct platform_device *pdev)
 		config = MACB_BF(CLK, MACB_CLK_DIV64);
 	macb_writel(bp, NCFGR, config);
 
-	macb_get_hwaddr(bp);
 	pdata = pdev->dev.platform_data;
+	memcpy(bp->dev->dev_addr,pdata->mac_addr,6);
+	__macb_set_hwaddr(bp);
+	macb_get_hwaddr(bp);
 
 	if (pdata && pdata->is_rmii)
 #if defined(CONFIG_ARCH_AT91)

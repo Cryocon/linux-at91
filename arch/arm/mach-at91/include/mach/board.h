@@ -86,6 +86,7 @@ struct at91_eth_data {
 	u32		phy_mask;
 	u8		phy_irq_pin;	/* PHY IRQ */
 	u8		is_rmii;	/* using RMII interface? */
+	char	mac_addr[6];
 };
 #if defined(CONFIG_ARCH_AT91SAM9X5)
 extern void __init at91_add_device_eth(short eth_id, struct at91_eth_data *data);
