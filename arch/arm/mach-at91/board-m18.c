@@ -27,6 +27,7 @@
 #include <linux/spi/spi.h>
 #include <linux/types.h>
 #include <linux/usb/android_composite.h>
+#include <linux/etherdevice.h>
 #include <mach/cpu.h>
 
 #include <video/atmel_lcdfb.h>
@@ -180,18 +181,22 @@ static struct at91_eth_data __initdata m18_macb0_data = {
 	.is_rmii	= 1,
 };
 
-void m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
+static void m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
 {
 	char *mac_addr = m18_macb0_data.mac_addr;
 	off_t offset = (off_t)context;
 
+	if (is_valid_ether_addr(mac_addr)) {
+		return;
+	}
 	/* Read MAC addr from EEPROM */
 	int bytes = mem_acc->read(mem_acc, mac_addr, offset, ETH_ALEN);
-	if (bytes == ETH_ALEN) {
-		pr_info("Read MAC addr from EEPROM: %pM\n", mac_addr);
-	} else {
+	if (bytes != ETH_ALEN) {
 		pr_warning("Failed to read MAC addr from EEPROM: %d\n", bytes);
+		return;
 	}
+	pr_info("Read MAC addr from EEPROM: %pM\n", mac_addr);
+	at91_add_device_eth(0, &m18_macb0_data);
 }
 
 static struct at24_platform_data eeprom_info = {
@@ -199,7 +204,7 @@ static struct at24_platform_data eeprom_info = {
 	.page_size	= 128,
 	.flags		= AT24_FLAG_ADDR16,
 	.setup      = m18_get_mac_addr,
-	.context	= (void *)0,
+	.context	= (void *)0,		// EEPROM address containing MAC address
 };
 
 
@@ -462,8 +467,6 @@ static void __init m18_board_init(void)
 	at91_add_device_usbh_ehci(&m18_usbh_hs_data);
 	/* USB HS Device */
 	at91_add_device_usba(&m18_usba_udc_data);
-	/* Ethernet */
-	at91_add_device_eth(0, &m18_macb0_data);
 	/* MMC */
 	at91_add_device_mci(0, &mci0_data);
 	/* SPI */
