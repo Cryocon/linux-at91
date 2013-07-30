@@ -452,6 +452,8 @@ static struct atmel_lcdfb_info __initdata ek_lcdc_data;
 
 static void __init m18_board_init(void)
 {
+	at91_set_gpio_output(AT91_PIN_PB11, 1);	// Set PHY RST# (pulled down) to HIGH
+
 	/* I2C */
 	at91_add_device_i2c(0, m18_i2c_devices, ARRAY_SIZE(m18_i2c_devices));
 	/* LCD Controller */
