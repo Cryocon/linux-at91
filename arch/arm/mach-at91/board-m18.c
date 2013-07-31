@@ -235,23 +235,6 @@ static struct i2c_board_info __initdata m18_i2c_devices[] = {
 	},
 };
 
-/*
- * USB Host port (OHCI)
- */
-/* Port A is shared with gadget port & Port C is full-speed only */
-static struct at91_usbh_data __initdata m18_usbh_fs_data = {
-	.ports		= 3,
-
-};
-
-/*
- * USB HS Host port (EHCI)
- */
-/* Port A is shared with gadget port */
-static struct at91_usbh_data __initdata m18_usbh_hs_data = {
-	.ports		= 2,
-};
-
 
 /*
  * USB HS Device port
@@ -464,9 +447,6 @@ static void __init m18_board_init(void)
 	m18_usba_udc_data.vbus_pin = AT91_PIN_PB16;
 	/* Serial */
 	at91_add_device_serial();
-	/* USB HS Host */
-	at91_add_device_usbh_ohci(&m18_usbh_fs_data);
-	at91_add_device_usbh_ehci(&m18_usbh_hs_data);
 	/* USB HS Device */
 	at91_add_device_usba(&m18_usba_udc_data);
 	/* MMC */
