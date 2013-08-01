@@ -14,6 +14,7 @@
  * option) any later version.
  *
  */
+#define DEBUG
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
@@ -228,6 +229,7 @@ int get_phy_id(struct mii_bus *bus, int addr, u32 *phy_id)
 
 	*phy_id |= (phy_reg & 0xffff);
 
+	pr_info("Read phy ID 0x%08x\n", *phy_id);
 	return 0;
 }
 EXPORT_SYMBOL(get_phy_id);

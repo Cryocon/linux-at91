@@ -262,6 +262,14 @@ static int macb_mii_init(struct macb *bp)
 
 	dev_set_drvdata(&bp->dev->dev, bp->mii_bus);
 
+	int phy_control_2_reg = bp->mii_bus->read(bp->mii_bus, 0, 0x1f);
+	if (phy_control_2_reg >= 0) {
+		pr_info("Read register 0x1f, value: 0x%08x\n", phy_control_2_reg);
+		phy_control_2_reg |= 1 << 7;	// RMII Reference Clock Select
+		bp->mii_bus->write(bp->mii_bus, 0, 0x1f, phy_control_2_reg);
+	} else {
+		pr_warn("Failed to read register 0x1f at PHY address 0\n");
+	}
 	if (mdiobus_register(bp->mii_bus))
 		goto err_out_free_mdio_irq;
 
