@@ -179,6 +179,7 @@ static void __init m18_add_device_buttons(void)
  */
 static struct at91_eth_data __initdata m18_macb0_data = {
 	.is_rmii	= 1,
+	.phy_irq_pin = AT91_PIN_PB8,
 };
 
 static void __init m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
