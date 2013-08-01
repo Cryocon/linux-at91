@@ -181,7 +181,7 @@ static struct at91_eth_data __initdata m18_macb0_data = {
 	.is_rmii	= 1,
 };
 
-static void m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
+static void __init m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
 {
 	char *mac_addr = m18_macb0_data.mac_addr;
 	off_t offset = (off_t)context;
@@ -199,7 +199,7 @@ static void m18_get_mac_addr(struct memory_accessor *mem_acc, void *context)
 	at91_add_device_eth(0, &m18_macb0_data);
 }
 
-static struct at24_platform_data eeprom_info = {
+static struct at24_platform_data __initdata eeprom_info = {
 	.byte_len	= SZ_512K / 8,
 	.page_size	= 128,
 	.flags		= AT24_FLAG_ADDR16,
