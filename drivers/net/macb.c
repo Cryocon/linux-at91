@@ -20,6 +20,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/phy.h>
+#include <linux/micrel_phy.h>
 
 #include <mach/board.h>
 #include <mach/cpu.h>
@@ -202,6 +203,11 @@ static int macb_mii_probe(struct net_device *dev)
 	pdata = bp->pdev->dev.platform_data;
 	/* TODO : add pin_irq */
 
+#ifdef CONFIG_MACH_M18
+	if ((phydev->phy_id & 0x00fffff0) == PHY_ID_KSZ8051 ) {
+		phydev->dev_flags &= MICREL_PHY_50MHZ_CLK;
+	}
+#endif
 	/* attach the mac to the phy */
 	ret = phy_connect_direct(dev, phydev, &macb_handle_link_change, 0,
 				 pdata && pdata->is_rmii ?
