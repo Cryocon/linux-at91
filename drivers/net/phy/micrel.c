@@ -127,6 +127,13 @@ static int ks8051_config_init(struct phy_device *phydev)
 	return 0;
 }
 
+static int ksz8031_config_init(struct phy_device *phydev) {
+	if (ks8051_config_init(phydev) || ksz8021_config_init(phydev)) {
+		return -1;
+	}
+	return 0;
+}
+
 static struct phy_driver ksphy_driver[] = {
 {
 	.phy_id		= PHY_ID_KS8737,
@@ -160,7 +167,7 @@ static struct phy_driver ksphy_driver[] = {
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause |
 			   SUPPORTED_Asym_Pause),
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
-	.config_init	= ksz8021_config_init,
+	.config_init	= ksz8031_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= kszphy_ack_interrupt,
