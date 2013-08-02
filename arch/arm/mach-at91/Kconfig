@@ -498,7 +498,6 @@ config MACH_CRYOCON9G35EK
 	select MMC_ATMELMCI_DMA
 	select SERIAL_ATMEL
 	select SERIAL_ATMEL_CONSOLE
-	select SERIAL_ATMEL_DMA
 	select MII
 	select MACB
 	select DAVICOM_PHY
@@ -521,7 +520,6 @@ config MACH_M18
 	select MMC_ATMELMCI_DMA
 	select SERIAL_ATMEL
 	select SERIAL_ATMEL_CONSOLE
-	select SERIAL_ATMEL_DMA
 	select MII
 	select MACB
 	select MICREL_PHY
