@@ -61,8 +61,11 @@
 
 #define cpu_has_pllb()		(!(cpu_is_at91sam9rl() \
 				|| cpu_is_at91sam9g45() \
+				|| cpu_is_at91sam9x5()))
+
+#define cpu_has_usb_clock_div()  (cpu_is_at91sam9n12() \
 				|| cpu_is_at91sam9x5() \
-				|| cpu_is_at91sam9n12())) \
+				|| cpu_is_at91sam9m10())
 
 #define cpu_has_upll()		(cpu_is_at91sam9g45() \
 				|| cpu_is_at91sam9x5())
@@ -664,7 +667,12 @@ static void __init at91_pllb_usbfs_clock_init(unsigned long main_clock)
 	 */
 	uhpck.parent = &pllb;
 
-	at91_pllb_usb_init = at91_pll_calc(main_clock, 48000000 * 2) | AT91_PMC_USB96M;
+	if (cpu_has_usb_clock_div())
+		at91_pllb_usb_init = at91_pll_calc(main_clock, 48000000 * 2);
+	else
+		at91_pllb_usb_init = at91_pll_calc(main_clock, 48000000 * 2) \
+							| AT91_PMC_USB96M;
+
 	pllb.rate_hz = at91_pll_rate(&pllb, main_clock, at91_pllb_usb_init);
 	if (cpu_is_at91rm9200()) {
 		uhpck.pmc_mask = AT91RM9200_PMC_UHP;
@@ -672,7 +680,8 @@ static void __init at91_pllb_usbfs_clock_init(unsigned long main_clock)
 		at91_sys_write(AT91_PMC_SCER, AT91RM9200_PMC_MCKUDP);
 	} else if (cpu_is_at91sam9260() || cpu_is_at91sam9261() ||
 		   cpu_is_at91sam9263() || cpu_is_at91sam9g20() ||
-		   cpu_is_at91sam9g10() || cpu_is_at572d940hf()) {
+		   cpu_is_at91sam9g10() || cpu_is_at572d940hf() ||
+		   cpu_is_at91sam9n12()) {
 		uhpck.pmc_mask = AT91SAM926x_PMC_UHP;
 		udpck.pmc_mask = AT91SAM926x_PMC_UDP;
 	} else if (cpu_is_at91cap9()) {
@@ -682,6 +691,17 @@ static void __init at91_pllb_usbfs_clock_init(unsigned long main_clock)
 
 	udpck.rate_hz = at91_usb_rate(&pllb, pllb.rate_hz, at91_pllb_usb_init);
 	uhpck.rate_hz = at91_usb_rate(&pllb, pllb.rate_hz, at91_pllb_usb_init);
+
+	/* PMC_USB clock init: choose 96 MHz PLLB */
+	if (cpu_has_usb_clock_div()) {
+		unsigned int usbr = AT91_PMC_USBS_UPLL;
+
+		/* For PLLB output 96M, set usb divider 2 (USBDIV + 1) */
+		unsigned int usbdiv = 1;
+
+		usbr |= usbdiv << AT91_PMC_USBDIV_OFFSET;
+		at91_sys_write(AT91_PMC_USB, usbr);
+	}
 }
 
 /* UPLL generated USB full speed clock init */

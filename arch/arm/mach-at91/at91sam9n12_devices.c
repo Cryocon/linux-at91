@@ -137,89 +137,48 @@ void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data) {}
 /* --------------------------------------------------------------------
  *  USB FS Device (Gadget)
  * -------------------------------------------------------------------- */
+#ifdef CONFIG_USB_GADGET_AT91
+static struct at91_udc_data udc_data;
 
-#if defined(CONFIG_USB_GADGET_ATMEL_USBA) || defined(CONFIG_USB_GADGET_ATMEL_USBA_MODULE)
-static struct resource usba_udc_resources[] = {
+static struct resource udc_resources[] = {
 	[0] = {
-		.start	= AT91SAM9N12_UDPFS_FIFO,
-		.end	= AT91SAM9N12_UDPFS_FIFO + SZ_512K - 1,
-		.flags	= IORESOURCE_MEM,
+		.start  = AT91SAM9N12_BASE_UDPFS,
+		.end    = AT91SAM9N12_BASE_UDPFS + SZ_16K - 1,
+		.flags  = IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= AT91SAM9N12_BASE_UDPFS,
-		.end	= AT91SAM9N12_BASE_UDPFS + SZ_1K - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	[2] = {
-		.start	= AT91SAM9N12_ID_UDPFS,
-		.end	= AT91SAM9N12_ID_UDPFS,
-		.flags	= IORESOURCE_IRQ,
+		.start  = AT91SAM9N12_ID_UDPFS,
+		.end    = AT91SAM9N12_ID_UDPFS,
+		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-#define EP(nam, idx, maxpkt, maxbk, dma, isoc)			\
-	[idx] = {						\
-		.name		= nam,				\
-		.index		= idx,				\
-		.fifo_size	= maxpkt,			\
-		.nr_banks	= maxbk,			\
-		.can_dma	= dma,				\
-		.can_isoc	= isoc,				\
-	}
-
-static struct usba_ep_data usba_udc_ep[] __initdata = {
-	/*   name     index   fifo_sz  banks  can_dma can_isoc */
-	EP("ep0",	0,	64,	1,	0,	0),
-	EP("ep1",	1,	64,	2,	0,	1),
-	EP("ep2",	2,	64,	2,	0,	1),
-	EP("ep3",	3,	64,	1,	0,	0),
-	EP("ep4",	4,	512,	2,	0,	1),
-	EP("ep5",	5,	512,	2,	0,	1),
-};
-
-#undef EP
-
-/*
- * pdata doesn't have room for any endpoints, so we need to
- * append room for the ones we need right after it.
- */
-static struct {
-	struct usba_platform_data pdata;
-	struct usba_ep_data ep[6];
-} usba_udc_data;
-
-static struct platform_device at91_usba_udc_device = {
-	.name		= "atmel_usba_udc",
-	.id		= -1,
-	.dev		= {
-				.platform_data	= &usba_udc_data.pdata,
+static struct platform_device at91_udc_device = {
+	.name       = "at91_udc",
+	.id         = -1,
+	.dev        = {
+		.platform_data      = &udc_data,
 	},
-	.resource	= usba_udc_resources,
-	.num_resources	= ARRAY_SIZE(usba_udc_resources),
+	.resource   = udc_resources,
+	.num_resources  = ARRAY_SIZE(udc_resources),
 };
 
-void __init at91_add_device_usba(struct usba_platform_data *data)
+void __init at91_add_device_udc(struct at91_udc_data *data)
 {
-	usba_udc_data.pdata.vbus_pin = -EINVAL;
-	usba_udc_data.pdata.num_ep = ARRAY_SIZE(usba_udc_ep);
-	memcpy(usba_udc_data.ep, usba_udc_ep, sizeof(usba_udc_ep));
+	if (data == NULL)
+		return;
 
-	if (data && data->vbus_pin > 0) {
-		at91_set_gpio_input(data->vbus_pin, 0);
+	if (data->vbus_pin) {
+		at91_set_gpio_input(data->vbus_pin, 0); /* pull-up disable */
 		at91_set_deglitch(data->vbus_pin, 1);
-		usba_udc_data.pdata.vbus_pin = data->vbus_pin;
 	}
 
 	/* Pullup pin is handled internally by USB device peripheral */
-
-	/* Clocks */
-	at91_clock_associate("utmi_clk", &at91_usba_udc_device.dev, "hclk");
-	at91_clock_associate("udphs_clk", &at91_usba_udc_device.dev, "pclk");
-
-	platform_device_register(&at91_usba_udc_device);
+	udc_data = *data;
+	platform_device_register(&at91_udc_device);
 }
 #else
-void __init at91_add_device_usba(struct usba_platform_data *data) {}
+void __init at91_add_device_udc(struct at91_udc_data *data) {}
 #endif
 
 /* --------------------------------------------------------------------

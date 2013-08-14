@@ -136,8 +136,8 @@ static struct clk uhpfs_clk = {
 	.pmc_mask	= 1 << AT91SAM9N12_ID_UHPFS,
 	.type		= CLK_TYPE_PERIPHERAL,
 };
-static struct clk udpfs_clk = {
-	.name		= "udpfs_clk",
+static struct clk udc_clk = {
+	.name		= "udc_clk",
 	.pmc_mask	= 1 << AT91SAM9N12_ID_UDPFS,
 	.type		= CLK_TYPE_PERIPHERAL,
 };
@@ -187,7 +187,7 @@ static struct clk *periph_clocks[] __initdata = {
 	&dma_clk,
 	&lcdc_clk,
 	&uhpfs_clk,
-	&udpfs_clk,
+	&udc_clk,
 	&ssc_clk,
 	&ohci_clk,
 	&tcb1_clk,

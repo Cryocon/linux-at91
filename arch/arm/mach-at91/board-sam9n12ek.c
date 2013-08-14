@@ -73,14 +73,15 @@ static void __init ek_init_irq(void)
  */
 static struct at91_usbh_data __initdata ek_usbh_fs_data = {
 	.ports		= 2,
-	.vbus_pin	= {AT91_PIN_PD1, AT91_PIN_PD3},
+	.vbus_pin   = {AT91_PIN_PC24, AT91_PIN_PC23},
 };
 
 /*
  * USB FS Device port
  */
-static struct usba_platform_data __initdata ek_usba_udc_data = {
-	.vbus_pin	= AT91_PIN_PB19,
+static struct at91_udc_data __initdata ek_udc_data = {
+	.vbus_pin   = AT91_PIN_PC0,
+	/* .pullup_pin = 0,       puul-up driven by UDC */
 };
 
 /*
@@ -364,7 +365,7 @@ static void __init ek_board_init(void)
 	/* USB FS Host */
 	at91_add_device_usbh_ohci(&ek_usbh_fs_data);
 	/* USB FS Device */
-	at91_add_device_usba(&ek_usba_udc_data);
+	at91_add_device_udc(&ek_udc_data);
 	/* SPI */
 	at91_add_device_spi(ek_spi_devices, ARRAY_SIZE(ek_spi_devices));
 	/* MMC */
