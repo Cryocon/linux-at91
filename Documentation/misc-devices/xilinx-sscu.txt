@@ -1,0 +1,90 @@
+Kernel driver xilinx-sscu
+=====================
+This is a bitbang driver that implements slave serial bitstream upload for
+Xilinx FPGAs. This is done in a bitbang, therefore should be portable to
+any hardware that has several spare GPIOs. using his driver you can reprogram
+the FPGA without stopping the actual system or popping on any jtag cables.
+
+Setting up the board
+=====================
+This driver attaches to a platform devices, therefore, to use it - you have to
+register it in your board file with any required hardware-specific initialisation.
+All the fields are self-explanatory. Note, you can have as many fpgas attached
+to the system as you want (as long as you have required GPIO lines)
+Here goes an example for arm/mach-at91 board of mine:
+#include <linux/xilinx-sscu.h>
+
+
+static struct xsscu_data charlene_xsscu_pdata[] = {
+  {
+  .name="Xilinx Spartan-XC3S500E",
+  .sout=AT91_PIN_PC7,
+  .prog_b=AT91_PIN_PC9,
+  .clk=AT91_PIN_PC6,
+  .done=AT91_PIN_PC4,
+  .init_b=AT91_PIN_PC10,
+  },
+};
+
+
+static int __init charlene_register_xsscu(struct xsscu_data* pdata, int count)
+{
+  int i,err;
+  struct platform_device *pdev;
+  for (i=0;i<count;i++)
+  {
+   printk(KERN_INFO "Registering xsscu interface for: %s\n", pdata[i].name);
+   at91_set_GPIO_periph(pdata[i].init_b,1);
+   at91_set_GPIO_periph(pdata[i].done,1);
+   at91_set_GPIO_periph(pdata[i].clk,0);
+   at91_set_GPIO_periph(pdata[i].sout,0);
+   at91_set_GPIO_periph(pdata[i].prog_b,0);
+   pdev = platform_device_alloc("xilinx-sscu", i);
+   if (!pdev)
+	{
+	printk(KERN_ERR "Platform device alloc failed - bailing out\n");
+	return 0;
+	}
+   pdev->dev.platform_data=&pdata[i];
+   err = platform_device_add(pdev);
+   if (err) break;
+  }
+  if (err) printk(KERN_INFO "Registration failed: %d\n",err);
+  return err;
+}
+
+Then a call
+charlene_register_xsscu(charlene_xsscu_pdata, ARRAY_SIZE(charlene_xsscu_pdata));
+in board_init will do the trick.
+Note the at91_set_GPIO_periph calls here. They ARE hardware-specific and they
+deatach muxed periphs from the pins and allow using them as plain IO.
+
+
+
+Using /dev/fpga interface
+=====================
+Using this interface is pretty simple. To upload a firmware just write in to
+/dev/fpga0 (1,2 whatever). Something like this:
+cat /path/to/bitstream.bin > /dev/fpga0
+This will issue a reset and upload the configuration to your fpga.
+If you had anything running on it - it will be stopped. Make sure to unload
+any kernel drivers for your homebrew hardware running in FPGA beforehand.
+If you would like to disable the fpga completely in runtime:
+echo "disable" > /dev/fpga0
+This will pull prog_b LOW, effectively stopping anything your FPGA was up to.
+And it will keep it that way until you upload another configuration.
+For information on fpga status:
+cat /dev/fpga0
+This should print you a pretty summary of what's going on.
+That's all. Simple, isn't it?
+
+Delay issues
+=====================
+Have a look at the DELAY macro defined in the code of the driver.
+At my 200Mhz ARM system this was not needed, but if you are running on
+some >1Ghz system, clock might go too fast, and you'll have to define DELAY
+to something like udelay(10);
+According to the datasheet, Spartan can handle compressed bitstreams at
+about 20Mhz max.
+I haven't run into this limit. Yet. If you do - update this document,
+please.
