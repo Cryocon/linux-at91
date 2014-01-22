@@ -24,6 +24,15 @@ config DEVKMEM
 	  kind of kernel debugging operations.
 	  When in doubt, say "N".
 
+config XSSCU
+        bool "Xilinx Slave Serial uploader driver"
+        default n
+        help
+         Say y if you have a Xilinx FPGA and want to bit-bang config data
+         in it, using the /dev/fpga interface in runtime.
+         (In other words - 'cp firmware.bin /dev/fpga')
+         NB: Do not forget to setup gpio pins in platform data.
+
 config SGI_SNSC
 	bool "SGI Altix system controller communication support"
 	depends on (IA64_SGI_SN2 || IA64_GENERIC)
