@@ -6,6 +6,15 @@ menu "Character devices"
 
 source "drivers/tty/Kconfig"
 
+config XSSCU
+        bool "Xilinx Slave Serial uploader driver"
+        default n
+        help
+         Say y if you have a Xilinx FPGA and want to bit-bang config data
+         in it, using the /dev/fpga interface in runtime.
+         (In other words - 'cp firmware.bin /dev/fpga')
+         NB: Do not forget to setup gpio pins in platform data.
+
 config DEVKMEM
 	bool "/dev/kmem virtual device support"
 	default y
