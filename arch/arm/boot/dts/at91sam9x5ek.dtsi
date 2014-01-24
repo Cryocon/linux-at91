@@ -16,6 +16,10 @@
 		bootargs = "console=ttyS0,115200 root=/dev/mtdblock1 rw rootfstype=ubifs ubi.mtd=1 root=ubi0:rootfs";
 	};
 
+    aliases {
+        spi0 = &spi0;
+        spi1 = &spi1;
+    };
 	ahb {
 		apb {
 			adc0: adc@f804c000 {
@@ -126,6 +130,28 @@
 					reg = <0x1a>;
 				};
 			};
+
+			spi0: spi@f0000000 {
+				status = "okay";
+				cs-gpios = <&pioA 14 0>, <0>, <0>, <0>;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    spi-cpha;
+                    reg = <0>;
+                };
+			};
+
+			spi1: spi@f0004000 {
+			    status = "okay";
+                cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <3000000>;
+                    reg = <0>;
+                };
+            };
+
 			fpga0: xilinx-sscu@0 {
 				compatible = "xilinx-sscu";
 				status = "okay";
