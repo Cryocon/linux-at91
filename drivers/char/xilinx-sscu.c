@@ -46,6 +46,8 @@ static int g_debug;
 module_param(g_debug, int, 0);	/* and these 2 lines */
 MODULE_PARM_DESC(g_debug, "Print lots of useless debug info.");
 
+static struct miscdevice *mdev = 0;
+
 /* This delay is system specific. In my case (200Mhz ARM) I can safely
    define it to nothing to speed things up. But on a faster system you
    may want to define it to something, e.g. udelay(100) if the clk will
@@ -238,7 +240,6 @@ static const struct file_operations xsscu_fileops = {
 
 static int xsscu_create_miscdevice(struct platform_device *p, int id)
 {
-	struct miscdevice *mdev;
 	struct xsscu_device_data *dev_data;
 	char *nm;
 	int err;
@@ -314,8 +315,26 @@ static int xsscu_probe(struct platform_device *p)
 	return err;
 }
 
+static int xsscu_remove(struct platform_device *p) {
+	struct xsscu_data *pdata = p->dev.platform_data;
+	if (mdev) {
+		misc_deregister(mdev);
+		kfree(mdev->name);
+		kfree(mdev->this_device->platform_data);
+		kfree(mdev);
+		mdev = 0;
+	}
+	gpio_free(pdata->clk);
+	gpio_free(pdata->done);
+	gpio_free(pdata->init_b);
+	gpio_free(pdata->prog_b);
+	gpio_free(pdata->sout);
+	return 0;
+}
+
 static struct platform_driver xsscu_driver = {
 	.probe = xsscu_probe,
+	.remove = xsscu_remove,
 	.driver = {
 		   .name = DRVNAME,
 		   .owner = THIS_MODULE,
@@ -330,7 +349,7 @@ static int __init xsscu_init(void)
 
 static void __exit xsscu_cleanup(void)
 {
-	/* Normally you would not like to unload this driver. */
+	platform_driver_unregister(&xsscu_driver);
 }
 
 module_init(xsscu_init);
