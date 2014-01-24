@@ -65,6 +65,18 @@
 							<0 13 0x0 0x0>; /* PA13 gpio, conflicted with SPI0_SPCK, MCI1_CK */
 					};
 				};
+				fpga0 {
+				    pinctrl_board_fpga0: fpga0-board {
+				        atmel,pins =
+				            <0 13 0 0
+				             3 16 0 0
+				             3 17 0 0
+				             3 18 0 0
+				             0 12 0 0
+				             0 11 0 0
+				             0 14 0 0>;
+				     };
+				};
 			};
 
 			dbgu: serial@fffff200 {
@@ -113,6 +125,19 @@
 					compatible = "wm8731";
 					reg = <0x1a>;
 				};
+			};
+			fpga0: xilinx-sscu@0 {
+				compatible = "xilinx-sscu";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_board_fpga0>;
+				gpios = <&pioA 13 0
+				&pioD 16 0
+				&pioD 17 0
+				&pioD 18 0
+				&pioA 12 0
+				&pioA 11 0
+				&pioA 14 0>;
 			};
 		};
 
