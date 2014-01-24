@@ -37,6 +37,8 @@
 #include <linux/miscdevice.h>
 #include <linux/gpio.h>
 #include <linux/delay.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
 
 #define DRVNAME "xilinx-sscu"
 #define DEVNAME "fpga"
@@ -251,10 +253,12 @@ static int xsscu_create_miscdevice(struct platform_device *p, int id)
 	nm = kzalloc(64, GFP_KERNEL);
 	if (!nm) {
 		err = -ENOMEM;
+		ERR("Device name allocation failed");
 		goto freemisc;
 	}
 	dev_data = kzalloc(sizeof(struct xsscu_device_data), GFP_KERNEL);
 	if (!dev_data) {
+		ERR("Device data allocation failed");
 		err = -ENOMEM;
 		goto freenm;
 	}
@@ -279,9 +283,35 @@ freemisc:
 	return err;
 }
 
+static int of_xilinx_sscu_get_pins(struct device_node *np,
+		unsigned int *clk_pin, unsigned int *done_pin, unsigned int *init_pin, unsigned int *prog_pin, unsigned int *sout_pin)
+{
+	if (of_gpio_count(np) < 2)
+		return -ENODEV;
+
+	*clk_pin =  of_get_gpio(np, 0);
+	*done_pin = of_get_gpio(np, 1);
+	*init_pin = of_get_gpio(np, 2);
+	*prog_pin = of_get_gpio(np, 3);
+	*sout_pin = of_get_gpio(np, 4);
+
+	if (!gpio_is_valid(*clk_pin) ||
+			!gpio_is_valid(*done_pin) ||
+			!gpio_is_valid(*init_pin) ||
+			!gpio_is_valid(*prog_pin) ||
+			!gpio_is_valid(*sout_pin)) {
+		pr_err("%s: invalid GPIO pins\n",
+		       np->full_name);
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
 static int xsscu_probe(struct platform_device *p)
 {
 	int err;
+	int ret;
 	int id;
 	struct xsscu_data *pdata = p->dev.platform_data;
 	/* some id magic */
@@ -290,47 +320,94 @@ static int xsscu_probe(struct platform_device *p)
 	else
 		id = p->id;
 	DBG("Probing xsscu platform device with id %d", p->id);
-	if (!pdata) {
-		ERR("Missing platform_data, sorry dude");
-		return -ENOMEM;
+	unsigned int clk_pin, done_pin, init_pin, prog_pin, sout_pin;
+
+	if (p->dev.of_node) {
+		ret = of_xilinx_sscu_get_pins(p->dev.of_node,
+					   &clk_pin, &done_pin, &init_pin, &prog_pin, &sout_pin);
+		if (ret)
+			return ret;
+
+	} else {
+		if (!p->dev.platform_data) {
+			ERR("Missing platform_data, sorry dude");
+			return -ENXIO;
+		}
+		pdata = p->dev.platform_data;
+		clk_pin = pdata->clk;
+		done_pin = pdata->done;
+		init_pin = pdata->init_b;
+		prog_pin = pdata->prog_b;
+		sout_pin = pdata->sout;
 	}
+
+	if (!p->dev.platform_data) {
+		pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+		p->dev.platform_data = pdata;
+	}
+	if (p->dev.of_node) {
+		pdata->clk = clk_pin;
+		pdata->done = done_pin;
+		pdata->init_b = init_pin;
+		pdata->prog_b = prog_pin;
+		pdata->sout = sout_pin;
+//		of_i2c_gpio_get_props(p->dev.of_node, pdata);
+	}
+
 	/* claim gpio pins */
-	err = gpio_request(pdata->clk, "xilinx-sscu-clk") +
-	    gpio_request(pdata->done, "xilinx-sscu-done") +
-	    gpio_request(pdata->init_b, "xilinx-sscu-init_b") +
-	    gpio_request(pdata->prog_b, "xilinx-sscu-prog_b") +
-	    gpio_request(pdata->sout, "xilinx-sscu-sout");
+	err = gpio_request(clk_pin, "xilinx-sscu-clk") ||
+	    gpio_request(done_pin, "xilinx-sscu-done") ||
+	    gpio_request(init_pin, "xilinx-sscu-init_b") ||
+	    gpio_request(prog_pin, "xilinx-sscu-prog_b") ||
+	    gpio_request(sout_pin, "xilinx-sscu-sout");
 	if (err) {
 		ERR("Failed to claim required GPIOs, bailing out");
-		return err;
+		goto err_request_pins;
 	}
+
 
 	gpio_direction_input(pdata->init_b);
 	gpio_direction_input(pdata->done);
 
 	err = xsscu_create_miscdevice(p, id);
+
+	platform_set_drvdata(p, mdev);
 	if (!err)
 		INF("FPGA Device %s registered as /dev/fpga%d", pdata->name,
 		    id);
-	return err;
-}
-
-static int xsscu_remove(struct platform_device *p) {
-	struct xsscu_data *pdata = p->dev.platform_data;
-	if (mdev) {
-		misc_deregister(mdev);
-		kfree(mdev->name);
-		kfree(mdev->this_device->platform_data);
-		kfree(mdev);
-		mdev = 0;
-	}
+err_request_pins:
 	gpio_free(pdata->clk);
 	gpio_free(pdata->done);
 	gpio_free(pdata->init_b);
 	gpio_free(pdata->prog_b);
 	gpio_free(pdata->sout);
+	return err;
+}
+
+
+
+static int xsscu_remove(struct platform_device *p) {
+	struct xsscu_data *pdata = p->dev.platform_data;
+	gpio_free(pdata->clk);
+	gpio_free(pdata->done);
+	gpio_free(pdata->init_b);
+	gpio_free(pdata->prog_b);
+	gpio_free(pdata->sout);
+	if (mdev) {
+		misc_deregister(mdev);
+		mdev = 0;
+	}
 	return 0;
 }
+
+#if defined(CONFIG_OF)
+static const struct of_device_id xilinx_sscu_dt_ids[] = {
+	{ .compatible = "xilinx-sscu" },
+	{ /* sentinel */ }
+};
+
+MODULE_DEVICE_TABLE(of, xilinx_sscu_dt_ids);
+#endif
 
 static struct platform_driver xsscu_driver = {
 	.probe = xsscu_probe,
@@ -338,8 +415,10 @@ static struct platform_driver xsscu_driver = {
 	.driver = {
 		   .name = DRVNAME,
 		   .owner = THIS_MODULE,
+		   .of_match_table = of_match_ptr(xilinx_sscu_dt_ids),
 		   }
 };
+//module_platform_driver(xsscu_driver);
 
 static int __init xsscu_init(void)
 {
