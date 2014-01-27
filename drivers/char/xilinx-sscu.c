@@ -91,6 +91,15 @@ static int xsscu_open(struct inode *inode, struct file *file)
 	dev_data = misc->this_device->platform_data;
 	if (dev_data->open)
 		return -EBUSY;
+	int err = gpio_request(dev_data->pdata->clk,"clk") ||
+	    gpio_request(dev_data->pdata->done, "done") ||
+	    gpio_request(dev_data->pdata->init_b, "init") ||
+	    gpio_request(dev_data->pdata->prog_b, "prog") ||
+	    gpio_request(dev_data->pdata->sout, "sout");
+	if (err) {
+		ERR("Failed to claim required GPIOs");
+		goto err_request_pins;
+	}
 	dev_data->open++;
 	DBG("Device %s opened", dev_data->pdata->name);
 	sprintf(dev_data->msg_buffer,
@@ -102,6 +111,13 @@ static int xsscu_open(struct inode *inode, struct file *file)
 	    );
 	dev_data->read_ptr = dev_data->msg_buffer;
 	return 0;
+err_request_pins:
+	gpio_free(dev_data->pdata->clk);
+	gpio_free(dev_data->pdata->done);
+	gpio_free(dev_data->pdata->init_b);
+	gpio_free(dev_data->pdata->prog_b);
+	gpio_free(dev_data->pdata->sout);
+	return err;
 }
 
 static int send_clocks(struct xsscu_data *p, int c)
@@ -147,6 +163,11 @@ static int xsscu_release(struct inode *inode, struct file *file)
 		dev_data->state = XSSCU_STATE_PROG_ERROR;
 	}
 	xsscu_dbg_state(dev_data->pdata);
+	gpio_free(dev_data->pdata->clk);
+	gpio_free(dev_data->pdata->done);
+	gpio_free(dev_data->pdata->init_b);
+	gpio_free(dev_data->pdata->prog_b);
+	gpio_free(dev_data->pdata->sout);
 	DBG("Device closed");
 	/* We must still close the device, hence return ok */
 	return 0;
@@ -354,33 +375,12 @@ static int xsscu_probe(struct platform_device *p)
 //		of_i2c_gpio_get_props(p->dev.of_node, pdata);
 	}
 
-	/* claim gpio pins */
-	err = gpio_request(clk_pin, "xilinx-sscu-clk") ||
-	    gpio_request(done_pin, "xilinx-sscu-done") ||
-	    gpio_request(init_pin, "xilinx-sscu-init_b") ||
-	    gpio_request(prog_pin, "xilinx-sscu-prog_b") ||
-	    gpio_request(sout_pin, "xilinx-sscu-sout");
-	if (err) {
-		ERR("Failed to claim required GPIOs, bailing out");
-		goto err_request_pins;
-	}
-
-
-	gpio_direction_input(pdata->init_b);
-	gpio_direction_input(pdata->done);
-
 	err = xsscu_create_miscdevice(p, id);
 
 	platform_set_drvdata(p, mdev);
 	if (!err)
 		INF("FPGA Device %s registered as /dev/fpga%d", pdata->name,
 		    id);
-err_request_pins:
-	gpio_free(pdata->clk);
-	gpio_free(pdata->done);
-	gpio_free(pdata->init_b);
-	gpio_free(pdata->prog_b);
-	gpio_free(pdata->sout);
 	return err;
 }
 
