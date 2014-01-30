@@ -230,4 +230,15 @@
 			status = "disabled";
 		};
 	};
+	
+	leds {
+		compatible = "gpio-leds";
+
+		pb18 {
+			label = "led1_ct";
+			gpios = <&pioC 9 1>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
+	
 };
