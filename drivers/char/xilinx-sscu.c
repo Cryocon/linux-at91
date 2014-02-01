@@ -141,14 +141,13 @@ static inline void xsscu_dbg_state(struct xsscu_data *p)
 	    gpio_get_value(p->init_b), gpio_get_value(p->done));
 }
 
-static int xsscu_release(struct inode *inode, struct file *file)
-{
+
+int xsscu_fsync (struct file *file, loff_t from, loff_t to, int datasync) {
 	struct miscdevice *misc;
 	struct xsscu_device_data *dev_data;
 	int err = 0;
 	misc = file->private_data;
 	dev_data = misc->this_device->platform_data;
-	dev_data->open--;
 	switch (dev_data->state) {
 	case XSSCU_STATE_UPLOADING:
 		err = send_clocks(dev_data->pdata, 10000);
@@ -164,6 +163,18 @@ static int xsscu_release(struct inode *inode, struct file *file)
 		dev_data->state = XSSCU_STATE_PROG_ERROR;
 	}
 	xsscu_dbg_state(dev_data->pdata);
+	return err ? -EIO : 0;
+}
+
+static int xsscu_release(struct inode *inode, struct file *file)
+{
+	struct miscdevice *misc;
+	struct xsscu_device_data *dev_data;
+	misc = file->private_data;
+	dev_data = misc->this_device->platform_data;
+	int err = 0;
+	dev_data->open--;
+	err = xsscu_fsync(file, 0, 0, 0);
 	gpio_free(dev_data->pdata->clk);
 	gpio_free(dev_data->pdata->done);
 	gpio_free(dev_data->pdata->init_b);
@@ -263,6 +274,7 @@ static const struct file_operations xsscu_fileops = {
 	.read = xsscu_read,
 	.open = xsscu_open,
 	.release = xsscu_release,
+	.fsync = xsscu_fsync,
 	.llseek = no_llseek,
 };
 
