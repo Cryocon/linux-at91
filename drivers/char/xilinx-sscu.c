@@ -98,6 +98,7 @@ static int xsscu_open(struct inode *inode, struct file *file)
 	    gpio_request(dev_data->pdata->sout, "sout");
 	if (err) {
 		ERR("Failed to claim required GPIOs");
+		err = -EBUSY;
 		goto err_request_pins;
 	}
 	dev_data->open++;
@@ -170,7 +171,11 @@ static int xsscu_release(struct inode *inode, struct file *file)
 	gpio_free(dev_data->pdata->sout);
 	DBG("Device closed");
 	/* We must still close the device, hence return ok */
-	return 0;
+	if (err) {
+		return -EIO;
+	} else {
+		return 0;
+	}
 }
 
 static ssize_t xsscu_read(struct file *filp, char *buffer,
