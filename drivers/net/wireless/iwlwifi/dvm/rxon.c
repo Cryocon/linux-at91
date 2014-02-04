@@ -1012,12 +1012,12 @@ static void iwl_calc_basic_rates(struct iwl_priv *priv,
 	 * As a consequence, it's not as complicated as it sounds, just add
 	 * any lower rates to the ACK rate bitmap.
 	 */
-	if (IWL_RATE_11M_INDEX < lowest_present_ofdm)
-		ofdm |= IWL_RATE_11M_MASK >> IWL_FIRST_CCK_RATE;
-	if (IWL_RATE_5M_INDEX < lowest_present_ofdm)
-		ofdm |= IWL_RATE_5M_MASK >> IWL_FIRST_CCK_RATE;
-	if (IWL_RATE_2M_INDEX < lowest_present_ofdm)
-		ofdm |= IWL_RATE_2M_MASK >> IWL_FIRST_CCK_RATE;
+	if (IWL_RATE_11M_INDEX < lowest_present_cck)
+		cck |= IWL_RATE_11M_MASK >> IWL_FIRST_CCK_RATE;
+	if (IWL_RATE_5M_INDEX < lowest_present_cck)
+		cck |= IWL_RATE_5M_MASK >> IWL_FIRST_CCK_RATE;
+	if (IWL_RATE_2M_INDEX < lowest_present_cck)
+		cck |= IWL_RATE_2M_MASK >> IWL_FIRST_CCK_RATE;
 	/* 1M already there or needed so always add */
 	cck |= IWL_RATE_1M_MASK >> IWL_FIRST_CCK_RATE;
 
@@ -1377,7 +1377,7 @@ static void iwlagn_chain_noise_reset(struct iwl_priv *priv)
 	struct iwl_chain_noise_data *data = &priv->chain_noise_data;
 	int ret;
 
-	if (!(priv->calib_disabled & IWL_CHAIN_NOISE_CALIB_DISABLED))
+	if (priv->calib_disabled & IWL_CHAIN_NOISE_CALIB_DISABLED)
 		return;
 
 	if ((data->state == IWL_CHAIN_NOISE_ALIVE) &&

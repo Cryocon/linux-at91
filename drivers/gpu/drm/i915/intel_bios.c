@@ -352,12 +352,14 @@ parse_general_features(struct drm_i915_private *dev_priv,
 		dev_priv->lvds_ssc_freq =
 			intel_bios_ssc_frequency(dev, general->ssc_freq);
 		dev_priv->display_clock_mode = general->display_clock_mode;
-		DRM_DEBUG_KMS("BDB_GENERAL_FEATURES int_tv_support %d int_crt_support %d lvds_use_ssc %d lvds_ssc_freq %d display_clock_mode %d\n",
+		dev_priv->fdi_rx_polarity_inverted = general->fdi_rx_polarity_inverted;
+		DRM_DEBUG_KMS("BDB_GENERAL_FEATURES int_tv_support %d int_crt_support %d lvds_use_ssc %d lvds_ssc_freq %d display_clock_mode %d fdi_rx_polarity_inverted %d\n",
 			      dev_priv->int_tv_support,
 			      dev_priv->int_crt_support,
 			      dev_priv->lvds_use_ssc,
 			      dev_priv->lvds_ssc_freq,
-			      dev_priv->display_clock_mode);
+			      dev_priv->display_clock_mode,
+			      dev_priv->fdi_rx_polarity_inverted);
 	}
 }
 
@@ -500,12 +502,8 @@ parse_edp(struct drm_i915_private *dev_priv, struct bdb_header *bdb)
 
 	edp = find_section(bdb, BDB_EDP);
 	if (!edp) {
-		if (SUPPORTS_EDP(dev_priv->dev) && dev_priv->edp.support) {
-			DRM_DEBUG_KMS("No eDP BDB found but eDP panel "
-				      "supported, assume %dbpp panel color "
-				      "depth.\n",
-				      dev_priv->edp.bpp);
-		}
+		if (SUPPORTS_EDP(dev_priv->dev) && dev_priv->edp.support)
+			DRM_DEBUG_KMS("No eDP BDB found but eDP panel supported.\n");
 		return;
 	}
 
@@ -658,9 +656,6 @@ init_vbt_defaults(struct drm_i915_private *dev_priv)
 	dev_priv->lvds_use_ssc = 1;
 	dev_priv->lvds_ssc_freq = intel_bios_ssc_frequency(dev, 1);
 	DRM_DEBUG_KMS("Set default to SSC at %dMHz\n", dev_priv->lvds_ssc_freq);
-
-	/* eDP data */
-	dev_priv->edp.bpp = 18;
 }
 
 static int __init intel_no_opregion_vbt_callback(const struct dmi_system_id *id)
