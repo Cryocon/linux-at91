@@ -161,9 +161,7 @@
 				&pioD 16 0
 				&pioD 17 0
 				&pioD 18 0
-				&pioA 12 0
-				&pioA 11 0
-				&pioA 14 0>;
+				&pioA 12 0>;
 			};
 		};
 
