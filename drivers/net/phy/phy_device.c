@@ -15,6 +15,7 @@
  *
  */
 
+#define DEBUG
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/kernel.h>
@@ -313,6 +314,7 @@ static int get_phy_id(struct mii_bus *bus, int addr, u32 *phy_id,
 
 	*phy_id |= (phy_reg & 0xffff);
 
+	pr_info("Read phy ID 0x%08x\n", *phy_id);
 	return 0;
 }
 

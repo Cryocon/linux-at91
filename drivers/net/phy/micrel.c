@@ -107,13 +107,6 @@ static int kszphy_config_init(struct phy_device *phydev)
 	return 0;
 }
 
-static int ksz8021_config_init(struct phy_device *phydev)
-{
-	const u16 val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
-	phy_write(phydev, MII_KSZPHY_OMSO, val);
-	return 0;
-}
-
 static int ks8051_config_init(struct phy_device *phydev)
 {
 	int regval;
@@ -124,6 +117,19 @@ static int ks8051_config_init(struct phy_device *phydev)
 		phy_write(phydev, MII_KSZPHY_CTRL, regval);
 	}
 
+	return 0;
+}
+
+static int ksz8031_config_init(struct phy_device *phydev) {
+	if (ks8051_config_init(phydev) < 0) {
+		return -1;
+	}
+	phy_write(phydev, 0x1d, 1 << 15);
+	u16 val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
+	phy_write(phydev, MII_KSZPHY_OMSO, val);
+	val = phy_read(phydev, MII_KSZPHY_CTRL);
+	val |= (1 << 8);  // Enable jabber counter?
+	phy_write(phydev, MII_KSZPHY_CTRL, val);
 	return 0;
 }
 
@@ -142,12 +148,12 @@ static struct phy_driver ksphy_driver[] = {
 	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= PHY_ID_KSZ8021,
-	.phy_id_mask	= 0x00ffffff,
-	.name		= "Micrel KSZ8021",
+	.name		= "Micrel KSZ8021 or KSZ8031",
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause |
 			   SUPPORTED_Asym_Pause),
+	.phy_id_mask	= 0x00fffffe,
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
-	.config_init	= ksz8021_config_init,
+	.config_init	= ksz8031_config_init,
 	.config_aneg	= genphy_config_aneg,
 	.read_status	= genphy_read_status,
 	.ack_interrupt	= kszphy_ack_interrupt,
@@ -168,7 +174,7 @@ static struct phy_driver ksphy_driver[] = {
 	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= PHY_ID_KSZ8051,
-	.phy_id_mask	= 0x00fffff0,
+	.phy_id_mask	= 0x00ffffff,
 	.name		= "Micrel KSZ8051",
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause
 				| SUPPORTED_Asym_Pause),
