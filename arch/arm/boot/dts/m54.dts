@@ -94,6 +94,11 @@
 
 			i2c0: i2c@f8010000 {
 				status = "okay";
+				24c512@50 {
+					compatible = "24c512";
+					reg = <0x50>;
+					pagesize = <128>;
+				};
 			};
 
 			pinctrl@fffff400 {
