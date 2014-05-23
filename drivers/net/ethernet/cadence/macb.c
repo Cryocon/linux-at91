@@ -28,6 +28,7 @@
 #include <linux/phy.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 #include <linux/pinctrl/consumer.h>
@@ -383,6 +384,28 @@ int macb_mii_init(struct macb *bp)
 	}
 
 	dev_set_drvdata(&bp->dev->dev, bp->mii_bus);
+
+	int phy_reset = of_get_named_gpio(bp->pdev->dev.of_node, "phy-reset-gpios", 0);
+	if (phy_reset < 0) {
+		pr_warn("Phy-reset GPIO not defined\n");
+	} else {
+		err = devm_gpio_request_one(&bp->pdev->dev, phy_reset,
+						GPIOF_OUT_INIT_LOW, "phy-reset");
+		if (err) {
+			pr_err("Failed to get gpio phy-reset: %d\n", err);
+		} else {
+			gpio_set_value(phy_reset, 0);
+			msleep(100);
+			gpio_set_value(phy_reset, 1);
+			msleep(10);
+		}
+	}
+	int phy_control_2_reg = bp->mii_bus->read(bp->mii_bus, 0, 0x1f);
+	if (phy_control_2_reg >= 0) {
+		pr_info("Read register 0x1f, value: 0x%08x\n", phy_control_2_reg);
+	} else {
+		pr_warn("Failed to read register 0x1f at PHY address 0\n");
+	}
 
 	np = bp->pdev->dev.of_node;
 	if (np) {
