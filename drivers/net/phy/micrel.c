@@ -154,7 +154,7 @@ static struct phy_driver ksphy_driver[] = {
 	.name		= "Micrel KSZ8021 or KSZ8031",
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause |
 			   SUPPORTED_Asym_Pause),
-	.phy_id_mask	= 0x00fffffe,
+	.phy_id_mask	= 0x00fffffc,
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
 	.config_init	= ksz8031_config_init,
 	.config_aneg	= genphy_config_aneg,
@@ -242,7 +242,7 @@ static struct mdio_device_id __maybe_unused micrel_tbl[] = {
 	{ PHY_ID_KSZ9021, 0x000ffffe },
 	{ PHY_ID_KSZ8001, 0x00ffffff },
 	{ PHY_ID_KS8737, 0x00fffff0 },
-	{ PHY_ID_KSZ8021, 0x00ffffff },
+	{ PHY_ID_KSZ8021, 0x00fffffc },
 	{ PHY_ID_KSZ8041, 0x00fffff0 },
 	{ PHY_ID_KSZ8051, 0x00fffff0 },
 	{ }
