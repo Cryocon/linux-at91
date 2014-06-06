@@ -109,6 +109,7 @@ static int kszphy_config_init(struct phy_device *phydev)
 
 static int ks8051_config_init(struct phy_device *phydev)
 {
+	pr_info("Starting KSZ80x1 initialization");
 	int regval;
 
 	if (phydev->dev_flags & MICREL_PHY_50MHZ_CLK) {
@@ -121,9 +122,11 @@ static int ks8051_config_init(struct phy_device *phydev)
 }
 
 static int ksz8031_config_init(struct phy_device *phydev) {
+	pr_info("Starting Micrel PHY initialization");
 	if (ks8051_config_init(phydev) < 0) {
 		return -1;
 	}
+	pr_info("Starting KSZ8021/KSZ8031 initialization");
 	phy_write(phydev, 0x1d, 1 << 15);
 	u16 val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
 	phy_write(phydev, MII_KSZPHY_OMSO, val);
