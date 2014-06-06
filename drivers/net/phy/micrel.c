@@ -202,6 +202,7 @@ static int ksz8021_config_init(struct phy_device *phydev)
 static int ks8051_config_init(struct phy_device *phydev)
 {
 	int rc;
+	pr_info("Starting KSZ80x1 initialization");
 
 	rc = kszphy_setup_led(phydev, 0x1f, 4);
 	if (rc)
@@ -262,6 +263,7 @@ static int ksz9021_config_init(struct phy_device *phydev)
 {
 	struct device *dev = &phydev->dev;
 	struct device_node *of_node = dev->of_node;
+	pr_info("Starting Micrel PHY initialization");
 
 	if (!of_node && dev->parent->of_node)
 		of_node = dev->parent->of_node;

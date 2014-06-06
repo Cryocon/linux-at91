@@ -394,10 +394,12 @@ int macb_mii_init(struct macb *bp)
 		if (err) {
 			pr_err("Failed to get gpio phy-reset: %d\n", err);
 		} else {
+			pr_info("Resetting PHY\n");
 			gpio_set_value(phy_reset, 0);
 			msleep(100);
 			gpio_set_value(phy_reset, 1);
 			msleep(10);
+			pr_info("PHY reset\n");
 		}
 	}
 	int phy_control_2_reg = bp->mii_bus->read(bp->mii_bus, 0, 0x1f);
