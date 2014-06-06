@@ -274,6 +274,8 @@ static int kszphy_config_init(struct phy_device *phydev)
 	const struct kszphy_type *type;
 	int ret;
 
+	pr_info("Starting KSZ80x1 initialization");
+
 	if (!priv)
 		return 0;
 
@@ -364,6 +366,8 @@ static int ksz9021_config_init(struct phy_device *phydev)
 	const struct device *dev = &phydev->mdio.dev;
 	const struct device_node *of_node = dev->of_node;
 	const struct device *dev_walker;
+
+	pr_info("Starting Micrel PHY initialization");
 
 	/* The Micrel driver has a deprecated option to place phy OF
 	 * properties in the MAC node. Walk up the tree of devices to
