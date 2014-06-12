@@ -190,6 +190,7 @@ static int ksz8021_config_init(struct phy_device *phydev)
 	const u16 val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
 	int rc;
 
+	pr_info("Starting KSZ8021/KSZ8031 initialization");
 	rc = kszphy_setup_led(phydev, 0x1f, 4);
 	if (rc)
 		dev_err(&phydev->dev, "failed to set led mode\n");
