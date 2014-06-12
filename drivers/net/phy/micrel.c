@@ -186,6 +186,7 @@ static int kszphy_config_init_led8041(struct phy_device *phydev)
 }
 
 static int ksz8031_config_init(struct phy_device *phydev) {
+	u16 val;
 	int rc;
 
 	rc = kszphy_setup_led(phydev, 0x1f, 4);
@@ -193,8 +194,8 @@ static int ksz8031_config_init(struct phy_device *phydev) {
 		dev_err(&phydev->dev, "failed to set led mode\n");
 
 	pr_info("Starting KSZ8021/KSZ8031 initialization");
-	phy_write(phydev, 0x1d, 1 << 15);
-	u16 val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
+
+	val = KSZPHY_OMSO_B_CAST_OFF | KSZPHY_OMSO_RMII_OVERRIDE;
 	phy_write(phydev, MII_KSZPHY_OMSO, val);
 	val = phy_read(phydev, MII_KSZPHY_CTRL);
 	val |= (1 << 8);  // Enable jabber counter?
@@ -385,7 +386,7 @@ static struct phy_driver ksphy_driver[] = {
 	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= PHY_ID_KSZ8051,
-	.phy_id_mask	= 0x00ffffff,
+	.phy_id_mask	= 0x00fffff0,
 	.name		= "Micrel KSZ8051",
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause
 				| SUPPORTED_Asym_Pause),
