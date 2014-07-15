@@ -36,7 +36,7 @@
     };
 
 	chosen {
-		bootargs = "console=ttyS0,115200 rootfstype=ubifs ubi.mtd=rootfs root=ubi0:0";
+		bootargs = "console=ttyS0,115200 ubi.mtd=rootfs rootfstype=ubifs root=ubi0_0";
 	};
 
     aliases {
