@@ -57,14 +57,9 @@
             pinctrl-names = "default";
             pinctrl-0 = <&pinctrl_nand0_m54>;
 
-			at91bootstrap@0 {
-				label = "at91bootstrap";
-				reg = <0x0 0x8000>;
-			};
-
-			barebox@8000 {
-				label = "barebox";
-				reg = <0x8000 0x18000>;
+			bootloader@0 {
+				label = "at91bootstrap/barebox";
+				reg = <0x0 0x20000>;
 			};
 
 			debugbarebox@40000 {
