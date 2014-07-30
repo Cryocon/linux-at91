@@ -188,15 +188,15 @@
 		};
 		
 		relay1 {
-					label = "relay1";
-					gpios = <&pioC 29 0>, <&pioC 5 0>;
-					linux,default-trigger = "default-on";
+			label = "relay1";
+			gpios = <&pioC 29 1>;
+			linux,default-trigger = "default-on";
 		};
 		
 		relay2 {
-					label = "relay2";
-					gpios = <&pioC 21 0>, <&pioC 4 0>;
-					linux,default-trigger = "default-on";
+			label = "relay2";
+			gpios = <&pioC 21 1>;
+			linux,default-trigger = "default-on";
 		};		
 	};
 	
