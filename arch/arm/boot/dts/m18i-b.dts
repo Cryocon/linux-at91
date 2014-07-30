@@ -127,12 +127,27 @@
 
 			spi0: spi@f0000000 {
 				status = "okay";
-				cs-gpios = <&pioD 7 0>, <&pioA 7 0>, <&pioA 1 0>, <&pioA 25 0>, <&pioC 14 0>, <&pioC 12 0>, <&pioC 11 0>;
+				cs-gpios = <&pioA 14 0>, <&pioA 7 0>, <&pioA 1 0>, <&pioA 29 0>, <0>;
                 spidev@0 {
                     compatible = "spidev";
                     spi-cpha;
                     spi-max-frequency = <1000000>;
                     reg = <0>;
+                };
+                spidev@1 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
+                };
+                spidev@2 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <2>;
+                };
+                spidev@3 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <3>;	// PA29 is a NC placeholder for GPIO chip selects	
                 };
 			};
 
