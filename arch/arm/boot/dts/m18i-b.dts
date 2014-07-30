@@ -52,32 +52,52 @@
 			atmel,pmecc-cap = <2>;
 			atmel,pmecc-sector-size = <512>;
 			nand-on-flash-bbt;
-			pinctrl-0 = <&pinctrl_nand_rdy_enable &pinctrl_nand_oe_we_ale_cle &pinctrl_nand_bus_on_d16_8bit>;
 			status = "okay";
+            pinctrl-0 = <&pinctrl_nand_rdy_enable &pinctrl_nand_oe_we_ale_cle &pinctrl_nand0_m18>;
 
-			at91bootstrap@0 {
-				label = "at91bootstrap";
-				reg = <0x0 0x40000>;
+			bootloader@0 {
+				label = "at91bootstrap/barebox";
+				reg = <0x0 0x20000>;
 			};
 
-			uboot@40000 {
-				label = "u-boot";
-				reg = <0x40000 0x80000>;
+			debugbarebox@40000 {
+				label = "Debug barebox";
+				reg = <0x40000 0x40000>;
 			};
 
-			ubootenv@c0000 {
-				label = "U-Boot Env";
-				reg = <0xc0000 0x140000>;
+			env0@80000 {
+				label = "Barebox environment";
+				reg = <0x80000 0x40000>;
+			};
+			
+			env1@c0000 {
+				label = "Redundant barebox environment";
+				reg = <0xc0000 0x40000>;
+			};			
+			
+			oftree@180000 {
+				label = "Fallback device tree";
+				reg = <0x180000 0x80000>;
 			};
 
 			kernel@200000 {
-				label = "kernel";
+				label = "Fallback kernel";
 				reg = <0x200000 0x600000>;
 			};
 
 			rootfs@800000 {
 				label = "rootfs";
-				reg = <0x800000 0x1f800000>;
+				reg = <0x0800000 0x6000000>;
+			};
+			
+			data@6800000 {
+				label = "data";
+				reg = <0x6800000 0x3800000>;
+			};
+			
+			rootfs2@a000000 {
+				label = "rootfs2";
+				reg = <0xa000000 0x6000000>;
 			};
 		};
 			
@@ -105,6 +125,16 @@
 				lm73@49 {
 					compatible = "lm73";
 					reg = <0x49>;
+				};
+			};
+
+			pinctrl@fffff400 {
+
+				nand0 {
+					pinctrl_nand0_m18: nand0_m18 {
+						atmel,pins =
+							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
+					};
 				};
 			};
 
