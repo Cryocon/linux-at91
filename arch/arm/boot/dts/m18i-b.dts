@@ -53,9 +53,7 @@
 			atmel,pmecc-sector-size = <512>;
 			nand-on-flash-bbt;
 			status = "okay";
-
-            pinctrl-names = "default";
-            pinctrl-0 = <&pinctrl_nand0_m54>;
+            pinctrl-0 = <&pinctrl_nand_rdy_enable &pinctrl_nand_oe_we_ale_cle &pinctrl_nand0_m18>;
 
 			bootloader@0 {
 				label = "at91bootstrap/barebox";
@@ -133,10 +131,9 @@
 			pinctrl@fffff400 {
 
 				nand0 {
-					pinctrl_nand0_m54: nand0_m54-0 {
+					pinctrl_nand0_m18: nand0_m18 {
 						atmel,pins =
-							<3 14 0x0 0x1	/* PD14 CE# pull up */
-							 3 18 0x0 0x1>;	/* PD18 WP# pull up */
+							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
 					};
 				};
 			};
