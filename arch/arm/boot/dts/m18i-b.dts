@@ -183,8 +183,8 @@
 		
 		alarm {
 			label = "led_alarm";
-			gpios = <&pioC 16 0>;
-			linux,default-trigger = "heartbeat";
+			gpios = <&pioC 16 1>;
+			linux,default-trigger = "default-on";
 		};
 		
 		relay1 {
