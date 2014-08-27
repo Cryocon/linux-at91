@@ -48,7 +48,7 @@
             atmel,pmecc-cap = <2>;
             atmel,pmecc-sector-size = <512>;
             nand-on-flash-bbt;
-            status = "okay";
+            status = "disabled";
 
             pinctrl-names = "default";
             pinctrl-0 = <&pinctrl_nand0_m54>;
@@ -135,20 +135,6 @@
 				             0 14 0 0>;
 				     };
 				};
-
-				fpga1 {
-                    pinctrl_board_fpga1: fpga1-board {
-                        atmel,pins =
-                            <0 23 0 0
-                             2 01 0 0
-                             2 02 0 0
-                             2 00 0 0
-                             0 22 0 0
-                             0 21 0 0
-                             0  8 0 0
-                             0  0 0 0>;
-                      };
-                };
 			};
 
 			mmc0: mmc@f0008000 {
@@ -177,6 +163,16 @@
                     spi-max-frequency = <1000000>;
                     reg = <0>;
                 };
+                spidev@1 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
+                };
+                spidev@2 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <2>;
+                };
 			};
 
 			spi1: spi@f0004000 {
@@ -186,6 +182,11 @@
                     compatible = "spidev";
                     spi-max-frequency = <3000000>;
                     reg = <0>;
+                };
+                spidev@1 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
                 };
             };
 
@@ -197,28 +198,8 @@
                 gpios = <&pioA 13 0
                         &pioD 16 0
                         &pioD 17 0
-                        &pioD 15 0
-                        &pioA 12 0
-                        &pioA 11 0      // SPI0 MISO
-                        &pioA 14 0      // SPI0 CS0
-                        &pioA 07 0      // SPI0 CS1
-                        &pioA 01 0>;    // SPI0 CS2 (NC)
-            };
-
-            fpga1: xilinx-sscu@0 {
-                compatible = "xilinx-sscu";
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&pinctrl_board_fpga1>;
-                gpios = <&pioA 23 0
-                         &pioC 01 0
-                         &pioC 02 0
-                         &pioC  0 0
-                         &pioA 22 0
-                         &pioA 21 0     // SPI1 MISO
-                         &pioA  8 0     // SPI1 CS0
-                         &pioA  0 0		// SPI1 CS1
-                         &pioD 21 0>;   // ASPI6 - purpose unknown
+                        &pioD 18 0
+                        &pioA 12 0>;
             };
 		};
 
