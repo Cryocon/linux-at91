@@ -91,6 +91,16 @@ static int xsscu_open(struct inode *inode, struct file *file)
 	dev_data = misc->this_device->platform_data;
 	if (dev_data->open)
 		return -EBUSY;
+	int err = gpio_request(dev_data->pdata->clk,"clk") ||
+	    gpio_request(dev_data->pdata->done, "done") ||
+	    gpio_request(dev_data->pdata->init_b, "init") ||
+	    gpio_request(dev_data->pdata->prog_b, "prog") ||
+	    gpio_request(dev_data->pdata->sout, "sout");
+	if (err) {
+		ERR("Failed to claim required GPIOs");
+		err = -EBUSY;
+		goto err_request_pins;
+	}
 	dev_data->open++;
 	DBG("Device %s opened", dev_data->pdata->name);
 	sprintf(dev_data->msg_buffer,
@@ -102,6 +112,13 @@ static int xsscu_open(struct inode *inode, struct file *file)
 	    );
 	dev_data->read_ptr = dev_data->msg_buffer;
 	return 0;
+err_request_pins:
+	gpio_free(dev_data->pdata->clk);
+	gpio_free(dev_data->pdata->done);
+	gpio_free(dev_data->pdata->init_b);
+	gpio_free(dev_data->pdata->prog_b);
+	gpio_free(dev_data->pdata->sout);
+	return err;
 }
 
 static int send_clocks(struct xsscu_data *p, int c)
@@ -147,9 +164,18 @@ static int xsscu_release(struct inode *inode, struct file *file)
 		dev_data->state = XSSCU_STATE_PROG_ERROR;
 	}
 	xsscu_dbg_state(dev_data->pdata);
+	gpio_free(dev_data->pdata->clk);
+	gpio_free(dev_data->pdata->done);
+	gpio_free(dev_data->pdata->init_b);
+	gpio_free(dev_data->pdata->prog_b);
+	gpio_free(dev_data->pdata->sout);
 	DBG("Device closed");
 	/* We must still close the device, hence return ok */
-	return 0;
+	if (err) {
+		return -EIO;
+	} else {
+		return 0;
+	}
 }
 
 static ssize_t xsscu_read(struct file *filp, char *buffer,
