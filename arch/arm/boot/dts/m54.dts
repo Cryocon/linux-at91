@@ -19,6 +19,9 @@
 		apb {
 			hlcdc: hlcdc@f8038000 {
 				status = "okay";
+				hlcdc-display-controller {
+					pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_rgb565>;
+				};
 			};
 
 			macb0: ethernet@f802c000 {
