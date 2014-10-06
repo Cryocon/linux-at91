@@ -161,6 +161,10 @@
 			ssc0: ssc@f0010000 {
 				status = "disabled";
 			};
+
+			watchdog@fffffe40 {
+				status = "okay";
+			};
 		};
 	};
 	
