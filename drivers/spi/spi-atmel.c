@@ -1181,7 +1181,7 @@ static int atmel_spi_one_transfer(struct spi_master *master,
 		udelay(xfer->delay_usecs);
 
 	if (xfer->cs_change) {
-		if (list_is_last(&xfer->transfer_list,
+		if (!list_is_last(&xfer->transfer_list,
 				 &msg->transfers)) {
 			as->keep_cs = true;
 		} else {
