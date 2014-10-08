@@ -1329,7 +1329,7 @@ CONFIG_SPI_MASTER=y
 # SPI Master Controller Drivers
 #
 # CONFIG_SPI_ALTERA is not set
-CONFIG_SPI_ATMEL=m
+CONFIG_SPI_ATMEL=y
 # CONFIG_SPI_BITBANG is not set
 # CONFIG_SPI_GPIO is not set
 # CONFIG_SPI_FSL_SPI is not set
@@ -1343,7 +1343,7 @@ CONFIG_SPI_ATMEL=m
 #
 # SPI Protocol Masters
 #
-CONFIG_SPI_SPIDEV=m
+CONFIG_SPI_SPIDEV=y
 # CONFIG_SPI_TLE62X0 is not set
 # CONFIG_SPMI is not set
 # CONFIG_HSI is not set
