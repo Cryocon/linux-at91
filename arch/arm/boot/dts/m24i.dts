@@ -79,6 +79,10 @@
 			};
 		};
 		apb {
+			rtc@fffffeb0 {
+				status = "okay";
+			};
+			
 			hlcdc: hlcdc@f8038000 {
 				status = "disabled";
 			};
