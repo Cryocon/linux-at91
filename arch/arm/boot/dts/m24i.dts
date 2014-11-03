@@ -8,20 +8,79 @@
  */
 /dts-v1/;
 #include "at91sam9g35.dtsi"
-#include "at91sam9x5dm.dtsi"
-#include "at91sam9x5ek.dtsi"
 
 / {
 	model = "Cryocon M24I";
 	compatible = "atmel,at91sam9g35ek", "atmel,at91sam9x5ek", "atmel,at91sam9x5", "atmel,at91sam9";
 
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/mtdblock1 rw rootfstype=ubifs ubi.mtd=1 root=ubi0:rootfs";
+	};
+
+    aliases {
+        spi0 = &spi0;
+        spi1 = &spi1;
+    };
+
 	ahb {
+		nand0: nand@40000000 {
+			nand-bus-width = <8>;
+			nand-ecc-mode = "hw";
+			atmel,has-pmecc;	/* Enable PMECC */
+			atmel,pmecc-cap = <2>;
+			atmel,pmecc-sector-size = <512>;
+			nand-on-flash-bbt;
+			status = "okay";
+            pinctrl-0 = <&pinctrl_nand &pinctrl_nand0_m18>;
+
+			bootloader@0 {
+				label = "at91bootstrap/barebox";
+				reg = <0x0 0x20000>;
+			};
+
+			debugbarebox@40000 {
+				label = "Debug barebox";
+				reg = <0x40000 0x40000>;
+			};
+
+			env0@80000 {
+				label = "Barebox environment";
+				reg = <0x80000 0x40000>;
+			};
+			
+			env1@c0000 {
+				label = "Redundant barebox environment";
+				reg = <0xc0000 0x40000>;
+			};			
+			
+			oftree@180000 {
+				label = "Fallback device tree";
+				reg = <0x180000 0x80000>;
+			};
+
+			kernel@200000 {
+				label = "Fallback kernel";
+				reg = <0x200000 0x600000>;
+			};
+
+			rootfs@800000 {
+				label = "rootfs";
+				reg = <0x0800000 0x6000000>;
+			};
+			
+			data@6800000 {
+				label = "data";
+				reg = <0x6800000 0x3800000>;
+			};
+			
+			rootfs2@a000000 {
+				label = "rootfs2";
+				reg = <0xa000000 0x6000000>;
+			};
+		};
 		apb {
 			hlcdc: hlcdc@f8038000 {
-				status = "okay";
-				hlcdc-display-controller {
-					pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_rgb565>;
-				};
+				status = "disabled";
 			};
 
 			macb0: ethernet@f802c000 {
@@ -33,7 +92,7 @@
 			};
 
 			adc0: adc@f804c000 {
-				status = "okay";
+				status = "disabled";
 			};
 
 			spi0: spi@f0000000 {
@@ -131,6 +190,7 @@
 							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
 					};
 				};
+				
 			};
 
 			
@@ -145,26 +205,27 @@
                         &pioD 15 0
                         &pioA 12 0>;
             };
-            
-            fpga1: xilinx-sscu@0 {
-			    compatible = "xilinx-sscu";
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&pinctrl_board_fpga1>;
-                gpios = <&pioA 23 0
-                        &pioC  1 0
-                        &pioC  2 0
-                        &pioC  0 0
-                        &pioA 22 0>;
-            };
-
-			ssc0: ssc@f0010000 {
-				status = "disabled";
-			};
 
 			watchdog@fffffe40 {
 				status = "okay";
 			};
+
+			ssc0: ssc@f0010000 {
+				status = "disabled";
+			};
+		};
+
+		usb0: ohci@00600000 {
+			status = "okay";
+			num-ports = <3>;
+			atmel,vbus-gpio = <0 /* &pioD 18 GPIO_ACTIVE_LOW *//* Activate to have access to port A */
+					   &pioD 19 GPIO_ACTIVE_HIGH
+					   &pioD 20 GPIO_ACTIVE_HIGH
+					  >;
+		};
+
+		usb1: ehci@00700000 {
+			status = "okay";
 		};
 	};
 	
@@ -181,26 +242,6 @@
 			label = "fan";
 			gpios = <&pioC 8 0>;
 			linux,default-trigger = "default-on";
-		};
-	};
-	
-	gpio_keys {
-		compatible = "gpio-keys";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		key_interrupt {
-			label = "key_interrupt";
-			gpios = <&pioD 18 1>;
-			linux,code = <103>;
-			gpio-key,wakeup;
-		};
-		
-		key_select {
-			label = "key_select";
-			gpios = <&pioA 25 1>;
-			linux,code = <0x161>;
-			gpio-key,wakeup;
 		};
 	};
 	
