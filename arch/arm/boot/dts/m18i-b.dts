@@ -102,6 +102,9 @@
 		};
 			
 		apb {
+			rtc@fffffeb0 {
+				status = "okay";
+			};
 			
 			mmc1: mmc@f000c000 {
 				status = "disabled";
