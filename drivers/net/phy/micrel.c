@@ -196,6 +196,7 @@ static int ksz8021_config_init(struct phy_device *phydev)
 		dev_err(&phydev->dev, "failed to set led mode\n");
 
 	phy_write(phydev, MII_KSZPHY_OMSO, val);
+	phydev->dev_flags |= MICREL_PHY_50MHZ_CLK;
 	rc = ksz_config_flags(phydev);
 	return rc < 0 ? rc : 0;
 }
@@ -336,23 +337,8 @@ static struct phy_driver ksphy_driver[] = {
 	.driver		= { .owner = THIS_MODULE,},
 }, {
 	.phy_id		= PHY_ID_KSZ8021,
-	.phy_id_mask	= 0x00fffffc,
+	.phy_id_mask	= 0x00fffff0,
 	.name		= "Micrel KSZ8021 or KSZ8031",
-	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause |
-			   SUPPORTED_Asym_Pause),
-	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
-	.config_init	= ksz8021_config_init,
-	.config_aneg	= genphy_config_aneg,
-	.read_status	= genphy_read_status,
-	.ack_interrupt	= kszphy_ack_interrupt,
-	.config_intr	= kszphy_config_intr,
-	.suspend	= genphy_suspend,
-	.resume		= genphy_resume,
-	.driver		= { .owner = THIS_MODULE,},
-}, {
-	.phy_id		= PHY_ID_KSZ8031,
-	.phy_id_mask	= 0x00ffffff,
-	.name		= "Micrel KSZ8031",
 	.features	= (PHY_BASIC_FEATURES | SUPPORTED_Pause |
 			   SUPPORTED_Asym_Pause),
 	.flags		= PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
@@ -530,8 +516,7 @@ static struct mdio_device_id __maybe_unused micrel_tbl[] = {
 	{ PHY_ID_KSZ9031, 0x00fffff0 },
 	{ PHY_ID_KSZ8001, 0x00ffffff },
 	{ PHY_ID_KS8737, 0x00fffff0 },
-	{ PHY_ID_KSZ8021, 0x00fffffc },
-	{ PHY_ID_KSZ8031, 0x00fffffc },
+	{ PHY_ID_KSZ8021, 0x00fffff0 },
 	{ PHY_ID_KSZ8041, 0x00fffff0 },
 	{ PHY_ID_KSZ8051, 0x00fffff0 },
 	{ PHY_ID_KSZ8061, 0x00fffff0 },
