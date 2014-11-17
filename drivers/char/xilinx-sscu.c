@@ -341,7 +341,9 @@ static int xsscu_probe(struct platform_device *p)
 	int id;
 	struct xsscu_data *pdata = p->dev.platform_data;
 	/* some id magic */
-	if (p->id == -1)
+	if ((p->id < 0) && p->dev.of_node)
+		p->id = of_alias_get_id(p->dev.of_node, "fpga");
+	if (p->id < 0)
 		id = 0;
 	else
 		id = p->id;
