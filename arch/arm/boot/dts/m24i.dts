@@ -44,6 +44,8 @@
     aliases {
         spi0 = &spi0;
         spi1 = &spi1;
+        fpga0 = &fpga0;
+        fpga1 = &fpga1;
     };
 
 	ahb {
@@ -234,6 +236,18 @@
                         &pioD 17 0
                         &pioD 15 0
                         &pioA 12 0>;
+            };
+
+            fpga1: xilinx-sscu@1 {
+			    compatible = "xilinx-sscu";
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&pinctrl_board_fpga1>;
+                gpios = <&pioA 23 0
+                        &pioC 1 0
+                        &pioC 2 0
+                        &pioC 0 0
+                        &pioA 22 0>;
             };
 
 			watchdog@fffffe40 {
