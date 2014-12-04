@@ -35,6 +35,14 @@
         };
     };
 
+	slow_xtal {
+		clock-frequency = <32768>;
+	};
+
+	main_xtal {
+		clock-frequency = <12000000>;
+	};
+
 	chosen {
 		bootargs = "console=ttyS0,115200 root=/dev/mmcblk0p2 ro rootwait";
 	};
