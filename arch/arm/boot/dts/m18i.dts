@@ -106,6 +106,7 @@
 			spi0: spi@f0000000 {
 				status = "okay";
 				cs-gpios = <&pioD 7 0>, <0>, <0>, <0>;
+				rt;
                 spidev@0 {
                     compatible = "spidev";
                     spi-cpha;
