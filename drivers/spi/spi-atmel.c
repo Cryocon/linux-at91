@@ -1314,6 +1314,7 @@ static int atmel_spi_probe(struct platform_device *pdev)
 	master->dev.of_node = pdev->dev.of_node;
 	master->bus_num = pdev->id;
 	master->num_chipselect = master->dev.of_node ? 0 : 4;
+	master->rt = of_property_read_bool(master->dev.of_node, "rt");
 	master->setup = atmel_spi_setup;
 	master->transfer_one_message = atmel_spi_transfer_one_message;
 	master->cleanup = atmel_spi_cleanup;
