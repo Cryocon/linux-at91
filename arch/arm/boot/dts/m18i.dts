@@ -154,6 +154,7 @@
 		compatible = "gpio-keys";
 		#address-cells = <1>;
 		#size-cells = <0>;
+		autorepeat;
 
 		key_up {
 			label = "key_up";
