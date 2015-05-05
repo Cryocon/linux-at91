@@ -24,6 +24,8 @@
 #include <drm/drmP.h>
 #include <drm/drm_panel.h>
 
+#include <video/display_timing.h>
+
 #include "atmel_hlcdc_dc.h"
 
 /**
@@ -273,8 +275,12 @@ atmel_hlcdc_rgb_encoder_mode_set(struct drm_encoder *encoder,
 	struct drm_display_info *info = &rgb->connector.display_info;
 	unsigned long prate = clk_get_rate(rgb->hlcdc->sys_clk);
 	unsigned long mode_rate = mode->clock * 1000;
-	u32 cfg = ATMEL_HLCDC_CLKPOL;
+	u32 cfg = 0;
 	int div;
+
+	if (!(mode->private_flags & DISPLAY_FLAGS_PIXDATA_POSEDGE)) {
+		cfg |= ATMEL_HLCDC_CLKPOL;
+	}
 
 	if ((prate / 2) < mode_rate) {
 		prate *= 2;
