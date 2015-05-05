@@ -34,6 +34,7 @@
 #include <drm/drm_panel.h>
 
 #include <video/display_timing.h>
+
 #include <video/videomode.h>
 
 struct panel_desc {
@@ -1234,6 +1235,9 @@ static const struct of_device_id platform_of_match[] = {
 		.compatible = "chunghwa,claa101wb01",
 		.data = &chunghwa_claa101wb01
 	}, {
+		.compatible = "dlc,dlc0500ezg-t-6",
+		.data = &dlc_dlc0050ezg_t_6,
+	}, {
 		.compatible = "edt,et057090dhu",
 		.data = &edt_et057090dhu,
 	}, {
@@ -1245,9 +1249,6 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "foxlink,fl500wvr00-a0t",
 		.data = &foxlink_fl500wvr00_a0t,
-	}, {
-		.compatible = "dlc,dlc0500ezg-t-6",
-		.data = &dlc_dlc0050ezg_t_6,
 	}, {
 		.compatible = "giantplus,gpg482739qs5",
 		.data = &giantplus_gpg482739qs5

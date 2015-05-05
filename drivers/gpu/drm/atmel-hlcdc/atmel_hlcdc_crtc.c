@@ -87,6 +87,10 @@ static void atmel_hlcdc_crtc_mode_set_nofb(struct drm_crtc *c)
 
 	cfg = 0;
 
+	if (!(adj->private_flags & DISPLAY_FLAGS_PIXDATA_POSEDGE)) {
+		cfg |= ATMEL_HLCDC_CLKPOL;
+	}
+
 	prate = clk_get_rate(crtc->dc->hlcdc->sys_clk);
 	mode_rate = adj->crtc_clock * 1000;
 	if ((prate / 2) < mode_rate) {
