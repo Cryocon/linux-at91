@@ -213,6 +213,14 @@
 					compatible = "lm73";
 					reg = <0x48>;
 				};
+				lm73@49 {
+					compatible = "lm73";
+					reg = <0x49>;
+				};
+				lm73@4a {
+					compatible = "lm73";
+					reg = <0x4a>;
+				};
 			};
 			
 			pinctrl@fffff400 {
