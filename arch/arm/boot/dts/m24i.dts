@@ -163,7 +163,7 @@
 
 			spi1: spi@f0004000 {
 			    status = "okay";
-                cs-gpios = <&pioA 8 0>, <&pioA 0 0>, <&pioD 21 0>, <0>;
+                cs-gpios = <&pioA 8 0>, <&pioD 21 0>, <0>;
 				rt;
                 spidev@0 {
                     compatible = "spidev";
@@ -171,15 +171,10 @@
                     reg = <0>;
                 };
                 spidev@1 {
-                    compatible = "spidev";
-                    spi-max-frequency = <1000000>;
-                    reg = <1>;
-                };
-                spidev@2 {
                 	status = "disabled";
                     compatible = "spidev";
                     spi-max-frequency = <1000000>;
-                    reg = <2>;
+                    reg = <1>;
                 };
             };	
             
@@ -312,8 +307,16 @@
 		
 		fan {
 			label = "fan";
-			gpios = <&pioC 8 0>;
+			gpios = <&pioC 8 GPIO_ACTIVE_LOW>;
 			linux,default-trigger = "default-on";
+			default-state = "on";
+		};
+		
+		adc {
+			label = "adc";
+			gpios = <&pioA 0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "default-on";
+			default-state = "on";
 		};
 	};
 
