@@ -134,7 +134,7 @@
 			};
 
 			adc0: adc@f804c000 {
-				status = "okay";
+				status = "disabled";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_adc0_ad0
 					     &pinctrl_adc0_ad1
@@ -204,6 +204,7 @@
 			
 			i2c0: i2c@f8010000 {
 				status = "okay";
+				clock-frequency = <400000>;
 				lm73@48 {
 					compatible = "lm73";
 					reg = <0x48>;
@@ -216,9 +217,25 @@
 					compatible = "lm73";
 					reg = <0x4a>;
 				};
+				touch: ft5316@38 {
+					compatible = "ft5x06,ft5x06-touch";
+		            reg = <0x38>;
+		            pinctrl-names = "default";
+		            pinctrl-0 = <&ft5316_pins>;
+		            interrupt-parent = <&pioC>;
+		            interrupts = <31 IRQ_TYPE_EDGE_FALLING>;
+		            reset-gpios = <&pioB 11 0>; /* or PA27 TIOB0 */
+				};
 			};
 			
 			pinctrl@fffff400 {
+				touch {
+					ft5316_pins: touch-board {
+				        atmel,pins =
+				            <AT91_PIOC 31 AT91_PERIPH_A AT91_PINCTRL_PULL_UP 
+				             AT91_PIOB 11 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP>;
+					};
+				};
 				fpga0 {
 				    pinctrl_board_fpga0: fpga0-board {
 				        atmel,pins =
