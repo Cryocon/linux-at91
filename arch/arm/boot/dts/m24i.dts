@@ -10,7 +10,7 @@
 #include "at91sam9g35.dtsi"
 
 / {
-	model = "Cryocon M24I";
+	model = "Cryocon M54";
 	compatible = "atmel,at91sam9g35ek", "atmel,at91sam9x5ek", "atmel,at91sam9x5", "atmel,at91sam9";
 
     memory {
