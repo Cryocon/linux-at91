@@ -203,7 +203,6 @@ static inline void ts_deregister(struct ft5x06_ts *ts)
 	}
 }
 
-#ifdef DEBUG
 static void printHex(u8 const *buf, unsigned len)
 {
 	char hex[512];
@@ -219,7 +218,6 @@ static void printHex(u8 const *buf, unsigned len)
 	}
 	printk(KERN_ERR "%s\n", hex);
 }
-#endif
 
 static void write_reg(struct ft5x06_ts *ts, int regnum, int value)
 {
@@ -346,6 +344,17 @@ static void ts_work_func(struct work_struct *work)
 						       | p[3]) & 0x7ff;
 					p += 6;
 				}
+				for(i = 0; i < ARRAY_SIZE(buf); i++) {
+					if (buf[i] != 0x00 && buf[i] != 0xff) {
+						ts_evt_add(ts, buttons, points);
+						break;
+					}
+				}
+				if (i == ARRAY_SIZE(buf)) {
+					printk(KERN_ERR "%s: bad read ", client_name);
+					printHex(buf, sizeof(buf));
+				}
+
 			}
 		}
 
@@ -355,7 +364,6 @@ static void ts_work_func(struct work_struct *work)
 				"points[0].y = %d\n",
 		       client_name, buttons, points[0].x, points[0].y);
 #endif
-		ts_evt_add(ts, buttons, points);
 		if (--loop_max == 0)
 			goto error;
 	} while (ts->gp == -1 ? 0 : 0 == gpio_get_value(ts->gp));
