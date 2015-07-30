@@ -322,7 +322,6 @@ static void ts_work_func(struct work_struct *work)
 		if (ret != ARRAY_SIZE(readpkt)) {
 			printk(KERN_WARNING "%s: i2c_transfer failed\n",
 			       client_name);
-			msleep(1000);
 		} else {
 			int i;
 			unsigned char *p = buf+3;
