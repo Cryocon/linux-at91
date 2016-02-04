@@ -41,8 +41,8 @@ dtb-$(CONFIG_ARCH_AT91) += at91sam9g25ek.dtb
 dtb-$(CONFIG_ARCH_AT91) += at91sam9g35ek.dtb
 dtb-$(CONFIG_ARCH_AT91) += at91sam9x25ek.dtb
 dtb-$(CONFIG_ARCH_AT91) += at91sam9x35ek.dtb
-dtb-$(CONFIG_ARCH_AT91) += m54.dtb
 dtb-$(CONFIG_ARCH_AT91) += m24i.dtb
+dtb-$(CONFIG_ARCH_AT91) += m54-x1.dtb
 dtb-$(CONFIG_ARCH_AT91) += m18i.dtb
 dtb-$(CONFIG_ARCH_AT91) += m18i-b.dtb
 # sama5d3
