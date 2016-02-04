@@ -13,59 +13,105 @@
 	model = "Cryocon M54";
 	compatible = "atmel,at91sam9g35ek", "atmel,at91sam9x5ek", "atmel,at91sam9x5", "atmel,at91sam9";
 
-	memory {
-		reg = <0x20000000 0x8000000>;
+    memory {
+        reg = <0x20000000 0x8000000>;
+    };
+
+    clocks {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+
+        main_clock: clock@0 {
+            compatible = "atmel,osc", "fixed-clock";
+            clock-frequency = <12000000>;
+        };
+    };
+
+	slow_xtal {
+		clock-frequency = <32768>;
 	};
 
-	clocks {
-		slow_xtal {
-			clock-frequency = <32768>;
-		};
-
-		main_xtal {
-			clock-frequency = <12000000>;
-		};
+	main_xtal {
+		clock-frequency = <12000000>;
 	};
+
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/mtdblock1 rw rootfstype=ubifs ubi.mtd=1 root=ubi0:rootfs";
+	};
+
+    aliases {
+        spi0 = &spi0;
+        spi1 = &spi1;
+        fpga0 = &fpga0;
+        fpga1 = &fpga1;
+    };
+
 	ahb {
+		nand0: nand@40000000 {
+			nand-bus-width = <8>;
+			nand-ecc-mode = "hw";
+			atmel,has-pmecc;	/* Enable PMECC */
+			atmel,pmecc-cap = <2>;
+			atmel,pmecc-sector-size = <512>;
+			nand-on-flash-bbt;
+			status = "okay";
+            pinctrl-0 = <&pinctrl_nand &pinctrl_nand0_m18>;
+
+			bootloader@0 {
+				label = "at91bootstrap/barebox";
+				reg = <0x0 0x20000>;
+			};
+
+			debugbarebox@40000 {
+				label = "Debug barebox";
+				reg = <0x40000 0x40000>;
+			};
+
+			env0@80000 {
+				label = "Barebox environment";
+				reg = <0x80000 0x40000>;
+			};
+			
+			env1@c0000 {
+				label = "Redundant barebox environment";
+				reg = <0xc0000 0x40000>;
+			};			
+			
+			oftree@180000 {
+				label = "Fallback device tree";
+				reg = <0x180000 0x80000>;
+			};
+
+			kernel@200000 {
+				label = "Fallback kernel";
+				reg = <0x200000 0x600000>;
+			};
+
+			rootfs@800000 {
+				label = "rootfs";
+				reg = <0x0800000 0x6000000>;
+			};
+			
+			data@6800000 {
+				label = "data";
+				reg = <0x6800000 0x3800000>;
+			};
+			
+			rootfs2@a000000 {
+				label = "rootfs2";
+				reg = <0xa000000 0x6000000>;
+			};
+		};
+		
 		apb {
 			rtc@fffffeb0 {
 				status = "okay";
 			};
-
+			
 			hlcdc: hlcdc@f8038000 {
 				status = "okay";
-				
-				hlcdc_pwm: hlcdc-pwm {
-				    status = "okay";
-				};
-				
-				backlight: backlight {
-		            compatible = "pwm-backlight";
-		            pwms = <&hlcdc_pwm 0 50000 0>;
-		            brightness-levels = <0 4 8 16 32 64 128 255>;
-		            default-brightness-level = <0>;
-		            power-supply = <&bl_reg>;
-		            status = "okay";
-	            };
-
-	            panel: panel {
-		            compatible = "dlc,dlc0500ezg-t-6", "simple-panel";
-		            backlight = <&backlight>;
-		            power-supply = <&panel_reg>;
-		            #address-cells = <1>;
-		            #size-cells = <0>;
-		            status = "okay";
-
-		            port@0 {
-			            #address-cells = <1>;
-			            #size-cells = <0>;
-
-			            panel_input: endpoint@0 {
-				            reg = <0>;
-				            remote-endpoint = <&hlcdc_panel_output>;
-			            };
-		            };
-	            };
 				hlcdc-display-controller {
 					pinctrl-names = "default";
 					pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_m24x_rgb565>;
@@ -83,49 +129,55 @@
 				phy-mode = "rmii";
 				status = "okay";
 				phy-reset-gpios = <&pioA 3 0>; /* PA3 GPIO phy reset */
-				pinctrl-0 = <&pinctrl_macb0_rmii>;
+
+                pinctrl-0 = <&pinctrl_macb0_rmii>;
+			};
+
+			adc0: adc@f804c000 {
+				status = "disabled";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_adc0_ad0
+					     &pinctrl_adc0_ad1
+					     &pinctrl_adc0_ad2
+					     &pinctrl_adc0_ad3
+					     &pinctrl_adc0_adtrg>;
+				atmel,adc-ts-wires = <4>;
+				atmel,adc-ts-pressure-threshold = <10000>;
 			};
 
 			spi0: spi@f0000000 {
 				status = "okay";
-				cs-gpios = <&pioA 14 0>, <&pioA 7 0>, <0>, <0>;
+				cs-gpios = <&pioA 14 0>, <&pioA 7 0>;
 				rt;
-				spidev@0 {
-				    compatible = "spidev";
-				    spi-max-frequency = <1000000>;
-				    reg = <0>;
-				};
-				m25p40@1 {
-			        status = "okay";
-					reg = <1>;
-					#address-cells = <1>;
-					#size-cells = <1>;
-					compatible = "micron,m25p40";
-					spi-max-frequency = <2000000>;
-					mode = <0>;
-				};
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <0>;
+                };
+                spidev@1 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
+                };
 			};
 
 			spi1: spi@f0004000 {
-				status = "okay";
-				cs-gpios = <&pioA 8 0>, <&pioA 0 0>, <0>, <0>;
+			    status = "okay";
+                cs-gpios = <&pioA 8 0>, <&pioD 21 0>, <0>;
 				rt;
-				spidev@0 {
-				    compatible = "spidev";
-				    spi-max-frequency = <3000000>;
-				    reg = <0>;
-				};
-				m25p40@1 {
-				    status = "disabled";
-					reg = <1>;
-					#address-cells = <1>;
-					#size-cells = <1>;
-					compatible = "micron,m25p40";
-					spi-max-frequency = <1000000>;
-					mode = <0>;
-				};
-			};
-
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <3000000>;
+                    reg = <0>;
+                };
+                spidev@1 {
+                	status = "disabled";
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
+                };
+            };	
+            
 			mmc0: mmc@f0008000 {
 				pinctrl-0 = <
 					&pinctrl_mmc0_slot0_clk_cmd_dat0
@@ -135,14 +187,13 @@
 					reg = <0>;
 					bus-width = <4>;
 					cd-gpios = <0>;
-					non-removable;
 				};
 			};
 			
 			mmc1: mmc@f000c000 {
 				status = "disabled";
 			};
-
+			
 			dbgu: serial@fffff200 {
 				status = "okay";
 			};
@@ -150,47 +201,33 @@
 			usart1: serial@f8020000 {
 				status = "okay";
 			};
-
+			
 			i2c0: i2c@f8010000 {
 				status = "okay";
-				clock-frequency = <200000>;
-				tc665@1b {
-					compatible = "tc665";
-					reg = <0x1b>;
-					status = "disabled";
+				clock-frequency = <400000>;
+				lm73@48 {
+					compatible = "lm73";
+					reg = <0x48>;
+				};
+				lm73@49 {
+					compatible = "lm73";
+					reg = <0x49>;
+				};
+				lm73@4a {
+					compatible = "lm73";
+					reg = <0x4a>;
 				};
 				touch: ft5316@38 {
 					compatible = "ft5x06,ft5x06-touch";
 		            reg = <0x38>;
 		            pinctrl-names = "default";
 		            pinctrl-0 = <&ft5316_pins>;
-		            interrupt-parent = <&pioB>;
-		            interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
-		            reset-gpios = <&pioB 12 0>;
-					status = "okay";
-				};
-				lm73@48 {
-					compatible = "lm73";
-					reg = <0x48>;
-					status = "okay";
-				};
-				lm73@49 {
-					compatible = "lm73";
-					reg = <0x49>;
-					status = "okay";
-				};
-				lm73@4a {
-					compatible = "lm73";
-					reg = <0x4a>;
-					status = "okay";
-				};
-				24c512@50 {
-					compatible = "24c512";
-					reg = <0x50>;
-					pagesize = <128>;
+		            interrupt-parent = <&pioC>;
+		            interrupts = <31 IRQ_TYPE_EDGE_FALLING>;
+		            reset-gpios = <&pioB 11 0>; /* or PA27 TIOB0 */
 				};
 			};
-
+			
 			pinctrl@fffff400 {
 				touch {
 					ft5316_pins: touch-board {
@@ -205,25 +242,17 @@
 				            <AT91_PIOA 13 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOD 16 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOD 17 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOD 15 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOA 12 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 				     };
 				};
-
-
-				mmc0 {
-					pinctrl_board_mmc0: mmc0-board {
-						atmel,pins =
-							<AT91_PIOD 15 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP_DEGLITCH>;	/* PD15 gpio CD pin pull up and deglitch */
-					};
-				};
-
 				fpga1 {
 				    pinctrl_board_fpga1: fpga1-board {
 				        atmel,pins =
 				            <AT91_PIOA 23 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOC  1 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOC  2 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
-				             AT91_PIOA  2 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOC  0 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOA 22 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 				     };
 				};
@@ -239,13 +268,13 @@
 			
 			fpga0: xilinx-sscu@0 {
 			    compatible = "xilinx-sscu";
-                status = "disabled";
+                status = "okay";
                 pinctrl-names = "default";
                 pinctrl-0 = <&pinctrl_board_fpga0>;
                 gpios = <&pioA 13 0
                         &pioD 16 0
                         &pioD 17 0
-                        0 0 0
+                        &pioD 15 0
                         &pioA 12 0>;
             };
 
@@ -257,7 +286,7 @@
                 gpios = <&pioA 23 0
                         &pioC 1 0
                         &pioC 2 0
-                        &pioA 2 0
+                        &pioC 0 0
                         &pioA 22 0>;
             };
 
@@ -283,41 +312,7 @@
 			status = "okay";
 		};
 	};
-
-	i2c@0 {
-		status = "okay";
-		touch_gpio: ft5316@38 {
-			compatible = "ft5x06,ft5x06-touch";
-			reg = <0x38>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&ft5316_pins>;
-			interrupt-parent = <&pioB>;
-			interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
-			reset-gpios = <&pioB 12 0>;
-			status = "okay";
-		};
-		lm73_gpio@48 {
-			compatible = "lm73";
-			reg = <0x48>;
-			status = "okay";
-		};
-		lm73_gpio@49 {
-			compatible = "lm73";
-			reg = <0x49>;
-			status = "okay";
-		};
-		lm73_gpio@4a {
-			compatible = "lm73";
-			reg = <0x4a>;
-			status = "okay";
-		};
-		24c512_gpio@50 {
-			compatible = "24c512";
-			reg = <0x50>;
-			pagesize = <128>;
-		};
-	};
-
+	
 	leds {
 		compatible = "gpio-leds";
 
@@ -327,12 +322,18 @@
 			linux,default-trigger = "heartbeat";
 		};
 		
+		fan {
+			label = "fan";
+			gpios = <&pioC 8 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "default-on";
+			default-state = "on";
+		};
+		
 		adc {
 			label = "adc";
 			gpios = <&pioA 0 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "default-on";
 			default-state = "on";
-			status = "disabled";
 		};
 	};
 
@@ -350,5 +351,31 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		status = "okay";
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&hlcdc_pwm 0 50000 0>;
+		brightness-levels = <0 4 8 16 32 64 128 255>;
+		default-brightness-level = <6>;
+		power-supply = <&bl_reg>;
+		status = "okay";
+	};
+
+	panel: panel {
+		compatible = "dlc,dlc0500ezg-t-6", "simple-panel";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+
+		port@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			panel_input: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&hlcdc_panel_output>;
+			};
+		};
 	};
 };

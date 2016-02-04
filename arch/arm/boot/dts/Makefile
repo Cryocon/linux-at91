@@ -5,6 +5,7 @@ dtb-$(CONFIG_ARCH_ALPINE) += \
 dtb-$(CONFIG_MACH_ASM9260) += \
 	alphascale-asm9260-devkit.dtb
 # Keep at91 dtb files sorted alphabetically for each SoC
+
 dtb-$(CONFIG_SOC_SAM_V4_V5) += \
 	at91rm9200ek.dtb \
 	mpa1600.dtb \
@@ -41,7 +42,8 @@ dtb-$(CONFIG_SOC_SAM_V4_V5) += \
 	at91sam9x35ek.dtb \
 	m54.dtb \
 	m18i.dtb \
-	m18i-b.dtb
+	m18i-b.dtb \
+	m54-x1.dtb
 dtb-$(CONFIG_SOC_SAM_V7) += \
 	at91-kizbox2.dtb \
 	at91-sama5d2_xplained.dtb \
