@@ -37,6 +37,14 @@ static const struct mfd_cell atmel_hlcdc_cells[] = {
 		.of_compatible = "atmel,hlcdc-pwm",
 	},
 	{
+			.name = "backlight",
+			.of_compatible = "pwm-backlight",
+	},
+	{
+		.name = "panel",
+		.of_compatible = "simple-panel",
+	},
+	{
 		.name = "atmel-hlcdc-dc",
 		.of_compatible = "atmel,hlcdc-display-controller",
 	},

@@ -35,6 +35,38 @@
 
 			hlcdc: hlcdc@f8038000 {
 				status = "okay";
+				
+				hlcdc_pwm: hlcdc-pwm {
+				    status = "okay";
+				};
+				
+				backlight: backlight {
+		            compatible = "pwm-backlight";
+		            pwms = <&hlcdc_pwm 0 50000 0>;
+		            brightness-levels = <0 4 8 16 32 64 128 255>;
+		            default-brightness-level = <6>;
+		            power-supply = <&bl_reg>;
+		            status = "okay";
+	            };
+
+	            panel: panel {
+		            compatible = "dlc,dlc0500ezg-t-6", "simple-panel";
+		            backlight = <&backlight>;
+		            power-supply = <&panel_reg>;
+		            #address-cells = <1>;
+		            #size-cells = <0>;
+		            status = "okay";
+
+		            port@0 {
+			            #address-cells = <1>;
+			            #size-cells = <0>;
+
+			            panel_input: endpoint@0 {
+				            reg = <0>;
+				            remote-endpoint = <&hlcdc_panel_output>;
+			            };
+		            };
+	            };
 				hlcdc-display-controller {
 					pinctrl-names = "default";
 					pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_m24x_rgb565>;
@@ -319,33 +351,5 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		status = "okay";
-	};
-
-	backlight: backlight {
-		compatible = "pwm-backlight";
-		pwms = <&hlcdc_pwm 0 50000 0>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
-		default-brightness-level = <6>;
-		power-supply = <&bl_reg>;
-		status = "okay";
-	};
-
-	panel: panel {
-		compatible = "dlc,dlc0500ezg-t-6", "simple-panel";
-		backlight = <&backlight>;
-		power-supply = <&panel_reg>;
-		#address-cells = <1>;
-		#size-cells = <0>;
-		status = "okay";
-
-		port@0 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			panel_input: endpoint@0 {
-				reg = <0>;
-				remote-endpoint = <&hlcdc_panel_output>;
-			};
-		};
 	};
 };
