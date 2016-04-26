@@ -146,18 +146,51 @@
 							<AT91_PIOB 16 AT91_PERIPH_GPIO AT91_PINCTRL_DEGLITCH>;		/* PB16 gpio vbus sense, deglitch */
 					};
 				};
-			};
 
-			spi0: spi@f0000000 {
-				status = "okay";
-				cs-gpios = <&pioA 14 0>, <0>, <0>, <0>;
-				m25p80@0 {
-					compatible = "atmel,at25df321a";
-					spi-max-frequency = <50000000>;
-					reg = <0>;
+				fpga0 {
+				    pinctrl_board_fpga0: fpga0-board {
+				        atmel,pins =
+				            <AT91_PIOA 13 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOD 16 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOD 17 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOD 18 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOA 12 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
+				     };
 				};
 			};
 
+			spi0: spi@f0000000 {
+				/*status = "okay";*/
+				cs-gpios = <&pioA 14 0>, <0>, <0>, <0>;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    spi-cpha;
+                    reg = <0>;
+                };
+			};
+
+			spi1: spi@f0004000 {
+			    status = "okay";
+                cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <3000000>;
+                    reg = <0>;
+                };
+            };
+
+			fpga0: xilinx-sscu@0 {
+			    compatible = "xilinx-sscu";
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&pinctrl_board_fpga0>;
+                gpios = <&pioA 13 0
+                        &pioD 16 0
+                        &pioD 17 0
+                        &pioD 18 0
+                        &pioA 12 0>;
+            };
 			watchdog@fffffe40 {
 				status = "okay";
 			};
