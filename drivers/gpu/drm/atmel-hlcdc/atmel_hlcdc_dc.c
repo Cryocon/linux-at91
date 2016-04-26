@@ -550,6 +550,8 @@ static int atmel_hlcdc_dc_load(struct drm_device *dev)
 	/* force connectors detection */
 	drm_helper_hpd_irq_event(dev);
 
+	atmel_hlcdc_fb_output_poll_changed(dev);
+
 	return 0;
 
 err_periph_clk_disable:
