@@ -33,6 +33,31 @@
         fpga0 = &fpga0;
         fpga1 = &fpga1;
     };
+
+	fpga0: xilinx-sscu@0 {
+        compatible = "xilinx-sscu";
+        status = "disabled";
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_board_fpga0>;
+        gpios = <&pioA 13 0
+                &pioD 16 0
+                &pioD 17 0
+                0 0 0
+                &pioA 12 0>;
+    };
+
+    fpga1: xilinx-sscu@1 {
+	    compatible = "xilinx-sscu";
+        status = "okay";
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_board_fpga1>;
+        gpios = <&pioA 23 0
+                &pioC 1 0
+                &pioC 2 0
+                &pioA 2 0
+                &pioA 22 0>;
+    };
+
 	ahb {
 		apb {
 			rtc@fffffeb0 {
@@ -242,31 +267,6 @@
 				};
 				
 			};
-
-			
-			fpga0: xilinx-sscu@0 {
-			    compatible = "xilinx-sscu";
-                status = "disabled";
-                pinctrl-names = "default";
-                pinctrl-0 = <&pinctrl_board_fpga0>;
-                gpios = <&pioA 13 0
-                        &pioD 16 0
-                        &pioD 17 0
-                        0 0 0
-                        &pioA 12 0>;
-            };
-
-            fpga1: xilinx-sscu@1 {
-			    compatible = "xilinx-sscu";
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&pinctrl_board_fpga1>;
-                gpios = <&pioA 23 0
-                        &pioC 1 0
-                        &pioC 2 0
-                        &pioA 2 0
-                        &pioA 22 0>;
-            };
 
 			watchdog@fffffe40 {
 				status = "okay";
