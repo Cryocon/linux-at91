@@ -26,6 +26,13 @@
 			clock-frequency = <12000000>;
 		};
 	};
+
+    aliases {
+        spi0 = &spi0;
+        spi1 = &spi1;
+        fpga0 = &fpga0;
+        fpga1 = &fpga1;
+    };
 	ahb {
 		apb {
 			rtc@fffffeb0 {
