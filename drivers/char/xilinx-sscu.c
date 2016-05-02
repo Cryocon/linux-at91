@@ -339,10 +339,19 @@ static int xsscu_probe(struct platform_device *p)
 	int err;
 	int ret;
 	int id;
+	const __be32 *addr_be;
+	int len;
+
 	struct xsscu_data *pdata = p->dev.platform_data;
 	/* some id magic */
-	if ((p->id < 0) && p->dev.of_node)
+	if ((p->id < 0) && p->dev.of_node) {
 		p->id = of_alias_get_id(p->dev.of_node, "fpga");
+		if (p->id < 0) {
+			addr_be = of_get_property(p->dev.of_node, "reg", &len);
+			if (addr_be && len >= sizeof(*addr_be))
+				p->id = be32_to_cpup(addr_be);
+		}
+	}
 	if (p->id < 0)
 		id = 0;
 	else
