@@ -39,6 +39,7 @@
         status = "disabled";
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_board_fpga0>;
+        reg = <0x0 0>;
         gpios = <&pioA 13 0
                 &pioD 16 0
                 &pioD 17 0
@@ -51,6 +52,7 @@
         status = "okay";
         pinctrl-names = "default";
         pinctrl-0 = <&pinctrl_board_fpga1>;
+        reg = <0x1 0>;
         gpios = <&pioA 23 0
                 &pioC 1 0
                 &pioC 2 0
