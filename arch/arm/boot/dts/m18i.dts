@@ -15,6 +15,14 @@
     model = "Cryocon M18I";
     compatible = "atmel,at91sam9x5ek", "atmel,at91sam9x5", "atmel,at91sam9";
     
+    user_io@0 {
+        compatible = "adc_rdy_n,uio-pdrv-genirq";
+        status = "okay";
+        interrupt-parent = <&pioB>;
+        interrupts = <18 IRQ_TYPE_EDGE_FALLING 6>;
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_user_io>;
+    };
 
 	memory {
 		reg = <0x20000000 0x8000000>;
@@ -72,11 +80,20 @@
 				lm73@49 {
 					compatible = "lm73";
 					reg = <0x49>;
+					status = "okay";
 				};
 				24c512@50 {
 					compatible = "24c512";
 					reg = <0x50>;
 					pagesize = <128>;
+				};
+			};
+
+			pinctrl@fffff400 {
+				user_io {
+				    pinctrl_user_io: user_io0 {
+				        atmel,pins = <1 18 0x0 0x0>;
+				    };
 				};
 			};
 

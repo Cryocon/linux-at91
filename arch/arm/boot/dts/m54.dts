@@ -1,17 +1,28 @@
 /*
- * at91sam9g35ek.dts - Device Tree file for AT91SAM9G35-EK board
+ * m54.dts - Device Tree file for Cryocon M54 cryogenic temperature controller
  *
- *  Copyright (C) 2012 Atmel,
+ *  Copyright (C) 2016 Cryogenic Control Systems, Inc.
+ *                2012 Atmel,
  *                2012 Nicolas Ferre <nicolas.ferre@atmel.com>
  *
  * Licensed under GPLv2 or later.
  */
+ 
 /dts-v1/;
 #include "at91sam9g35.dtsi"
 
 / {
 	model = "Cryocon M54";
 	compatible = "atmel,at91sam9g35ek", "atmel,at91sam9x5ek", "atmel,at91sam9x5", "atmel,at91sam9";
+
+    user_io@0 {
+        compatible = "adc_rdy_n,uio-pdrv-genirq";
+        status = "okay";
+        interrupt-parent = <&pioB>;
+        interrupts = <18 IRQ_TYPE_EDGE_FALLING 6>;
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_user_io>;
+    };
 
 	memory {
 		reg = <0x20000000 0x8000000>;
@@ -222,6 +233,7 @@
 					compatible = "24c512";
 					reg = <0x50>;
 					pagesize = <128>;
+					status = "okay";
 				};
 			};
 
@@ -261,13 +273,19 @@
 				             AT91_PIOA 22 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 				     };
 				};
+
 				nand0 {
 					pinctrl_nand0_m18: nand0_m18 {
 						atmel,pins =
 							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
 					};
 				};
-				
+
+				user_io {
+				    pinctrl_user_io: user_io0 {
+				        atmel,pins = <1 18 0x0 0x0>;
+				    };
+				};
 			};
 
 			watchdog@fffffe40 {
