@@ -199,10 +199,10 @@
 			i2c0: i2c@f8010000 {
 				status = "okay";
 				clock-frequency = <200000>;
-				tc665@1b {
-					compatible = "tc665";
+				tc655: tc655@1b {
+					compatible = "microchip,tc655";
 					reg = <0x1b>;
-					status = "disabled";
+					status = "okay";
 				};
 				touch: ft5316@38 {
 					compatible = "ft5x06,ft5x06-touch";
@@ -313,6 +313,11 @@
 
 	i2c@0 {
 		status = "okay";
+		tc655_gpio: tc655@1b {
+			compatible = "microchip,tc655";
+			reg = <0x1b>;
+			status = "okay";
+		};
 		touch_gpio: ft5316@38 {
 			compatible = "ft5x06,ft5x06-touch";
 			reg = <0x38>;
