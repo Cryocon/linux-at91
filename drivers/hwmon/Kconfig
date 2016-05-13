@@ -1474,6 +1474,17 @@ config SENSORS_INA2XX
 	  This driver can also be built as a module.  If so, the module
 	  will be called ina2xx.
 
+config SENSORS_TC655
+	tristate "Microchip TC654 and TC655"
+	depends on I2C
+	depends on OF
+	help
+	  If you say yes here you get support for Microchip TC654 and 
+	  TC655 dual PWM fan speed control chips.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called tc655
+
 config SENSORS_TC74
 	tristate "Microchip TC74"
 	depends on I2C
