@@ -39,6 +39,7 @@
 	};
 
     aliases {
+	serial1 = &usart1;
         spi0 = &spi0;
         spi1 = &spi1;
         fpga0 = &fpga0;
