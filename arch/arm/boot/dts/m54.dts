@@ -350,6 +350,28 @@
 		};
 	};
 
+	spi@0 {
+		#address-cells = <0x1>;
+		#size-cells = <0>;
+		ranges;
+		status = "okay";
+		compatible = "spi-gpio";
+		gpio-sck = <&pioA 13 0>;
+		gpio-miso = <&pioA 11 0>;
+		gpio-mosi = <&pioA 12 0>;
+		cs-gpios = <&pioA 14 0>,
+			<&pioA 7 0>, <0>;
+		num-chipselects = <2>;
+		m25p40@1 {
+	        status = "okay";
+			reg = <1>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "micron,m25p40";
+			spi-max-frequency = <2000000>;
+			mode = <0>;
+		};
+	};
 	leds {
 		compatible = "gpio-leds";
 
