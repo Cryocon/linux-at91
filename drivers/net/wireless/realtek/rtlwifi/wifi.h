@@ -1323,14 +1323,13 @@ struct rtl_tid_data {
 
 struct rtl_sta_info {
 	struct list_head list;
-	u8 ratr_index;
-	u8 wireless_mode;
-	u8 mimo_ps;
-	u8 mac_addr[ETH_ALEN];
 	struct rtl_tid_data tids[MAX_TID_COUNT];
-
 	/* just used for ap adhoc or mesh*/
 	struct rssi_sta rssi_stat;
+	u16 wireless_mode;
+	u8 ratr_index;
+	u8 mimo_ps;
+	u8 mac_addr[ETH_ALEN];
 } __packed;
 
 struct rtl_priv;
@@ -2252,6 +2251,9 @@ struct rtl_mod_params {
 
 	/* default 0: 1 means do not disable interrupts */
 	bool int_clear;
+
+	/* select antenna */
+	int ant_sel;
 };
 
 struct rtl_hal_usbint_cfg {

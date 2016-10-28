@@ -4455,7 +4455,7 @@ int skl_update_scaler_crtc(struct intel_crtc_state *state)
 		      intel_crtc->base.base.id, intel_crtc->pipe, SKL_CRTC_INDEX);
 
 	return skl_update_scaler(state, !state->base.active, SKL_CRTC_INDEX,
-		&state->scaler_state.scaler_id, DRM_ROTATE_0,
+		&state->scaler_state.scaler_id, BIT(DRM_ROTATE_0),
 		state->pipe_src_w, state->pipe_src_h,
 		adjusted_mode->crtc_hdisplay, adjusted_mode->crtc_vdisplay);
 }
@@ -4816,7 +4816,7 @@ static void intel_post_plane_update(struct intel_crtc *crtc)
 
 	crtc->wm.cxsr_allowed = true;
 
-	if (pipe_config->wm_changed && pipe_config->base.active)
+	if (pipe_config->update_wm_post && pipe_config->base.active)
 		intel_update_watermarks(&crtc->base);
 
 	if (atomic->update_fbc)
@@ -4850,7 +4850,7 @@ static void intel_pre_plane_update(struct intel_crtc *crtc)
 		intel_set_memory_cxsr(dev_priv, false);
 	}
 
-	if (!needs_modeset(&pipe_config->base) && pipe_config->wm_changed)
+	if (!needs_modeset(&pipe_config->base) && pipe_config->update_wm_pre)
 		intel_update_watermarks(&crtc->base);
 }
 
@@ -6229,6 +6229,7 @@ static void valleyview_crtc_enable(struct drm_crtc *crtc)
 
 	intel_crtc_load_lut(crtc);
 
+	intel_update_watermarks(crtc);
 	intel_enable_pipe(intel_crtc);
 
 	assert_vblank_disabled(crtc);
@@ -9793,6 +9794,8 @@ static void broadwell_set_cdclk(struct drm_device *dev, int cdclk)
 	sandybridge_pcode_write(dev_priv, HSW_PCODE_DE_WRITE_FREQ_REQ, data);
 	mutex_unlock(&dev_priv->rps.hw_lock);
 
+	I915_WRITE(CDCLK_FREQ, DIV_ROUND_CLOSEST(cdclk, 1000) - 1);
+
 	intel_update_cdclk(dev);
 
 	WARN(cdclk != dev_priv->cdclk_freq,
@@ -11879,8 +11882,14 @@ int intel_plane_atomic_calc_changes(struct drm_crtc_state *crtc_state,
 			 plane->base.id, was_visible, visible,
 			 turn_off, turn_on, mode_changed);
 
-	if (turn_on || turn_off) {
-		pipe_config->wm_changed = true;
+	if (turn_on) {
+		pipe_config->update_wm_pre = true;
+
+		/* must disable cxsr around plane enable/disable */
+		if (plane->type != DRM_PLANE_TYPE_CURSOR)
+			pipe_config->disable_cxsr = true;
+	} else if (turn_off) {
+		pipe_config->update_wm_post = true;
 
 		/* must disable cxsr around plane enable/disable */
 		if (plane->type != DRM_PLANE_TYPE_CURSOR) {
@@ -11889,7 +11898,9 @@ int intel_plane_atomic_calc_changes(struct drm_crtc_state *crtc_state,
 			pipe_config->disable_cxsr = true;
 		}
 	} else if (intel_wm_need_update(plane, plane_state)) {
-		pipe_config->wm_changed = true;
+		/* FIXME bollocks */
+		pipe_config->update_wm_pre = true;
+		pipe_config->update_wm_post = true;
 	}
 
 	if (visible || was_visible)
@@ -12034,7 +12045,7 @@ static int intel_crtc_atomic_check(struct drm_crtc *crtc,
 	}
 
 	if (mode_changed && !crtc_state->active)
-		pipe_config->wm_changed = true;
+		pipe_config->update_wm_post = true;
 
 	if (mode_changed && crtc_state->enable &&
 	    dev_priv->display.crtc_compute_clock &&
@@ -13429,6 +13440,9 @@ static int intel_atomic_prepare_commit(struct drm_device *dev,
 	}
 
 	for_each_crtc_in_state(state, crtc, crtc_state, i) {
+		if (state->legacy_cursor_update)
+			continue;
+
 		ret = intel_crtc_wait_for_pending_flips(crtc);
 		if (ret)
 			return ret;
