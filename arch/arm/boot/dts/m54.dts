@@ -143,8 +143,6 @@
 				m25p40@1 {
 			        status = "okay";
 					reg = <1>;
-					#address-cells = <1>;
-					#size-cells = <1>;
 					compatible = "micron,m25p40";
 					spi-max-frequency = <2000000>;
 					mode = <0>;
@@ -163,8 +161,6 @@
 				m25p40@1 {
 				    status = "disabled";
 					reg = <1>;
-					#address-cells = <1>;
-					#size-cells = <1>;
 					compatible = "micron,m25p40";
 					spi-max-frequency = <1000000>;
 					mode = <0>;
@@ -311,7 +307,7 @@
 		};
 	};
 
-	i2c@0 {
+	i2c-gpio-0 {
 		status = "okay";
 		tc655_gpio: tc655@1b {
 			compatible = "microchip,tc655";
@@ -350,12 +346,11 @@
 		};
 	};
 
-	spi@0 {
-		#address-cells = <0x1>;
-		#size-cells = <0>;
-		ranges;
-		status = "okay";
+	spi-gpio-0 {
 		compatible = "spi-gpio";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
 		gpio-sck = <&pioA 13 0>;
 		gpio-miso = <&pioA 11 0>;
 		gpio-mosi = <&pioA 12 0>;
@@ -365,8 +360,6 @@
 		m25p40@1 {
 	        status = "okay";
 			reg = <1>;
-			#address-cells = <1>;
-			#size-cells = <1>;
 			compatible = "micron,m25p40";
 			spi-max-frequency = <2000000>;
 			mode = <0>;

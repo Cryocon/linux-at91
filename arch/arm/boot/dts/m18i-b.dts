@@ -224,7 +224,7 @@
 		};
 	};
 
-	i2c@0 {
+	i2c-gpio-0 {
 		status = "okay";
 		lm73_gpio@49 {
 			compatible = "lm73";
