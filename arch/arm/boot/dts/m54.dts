@@ -74,8 +74,11 @@
 
 	ahb {
 		apb {
-			rtc@fffffeb0 {
+			macb0: ethernet@f802c000 {
+				phy-mode = "rmii";
 				status = "okay";
+				phy-reset-gpios = <&pioA 3 0>; /* PA3 GPIO phy reset */
+				pinctrl-0 = <&pinctrl_macb0_rmii>;
 			};
 
 			hlcdc: hlcdc@f8038000 {
@@ -125,11 +128,8 @@
 				};
 			};
 
-			macb0: ethernet@f802c000 {
-				phy-mode = "rmii";
+			rtc@fffffeb0 {
 				status = "okay";
-				phy-reset-gpios = <&pioA 3 0>; /* PA3 GPIO phy reset */
-				pinctrl-0 = <&pinctrl_macb0_rmii>;
 			};
 
 			spi0: spi@f0000000 {
@@ -372,6 +372,7 @@
 			mode = <0>;
 		};
 	};
+
 	leds {
 		compatible = "gpio-leds";
 

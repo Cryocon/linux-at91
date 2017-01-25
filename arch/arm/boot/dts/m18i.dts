@@ -46,8 +46,38 @@
 
 	ahb {
 		apb {
+			macb0: ethernet@f802c000 {
+			    phy-mode = "rmii";
+			    status = "okay";
+				phy-reset-gpios = <&pioD 15 0>; /* PD15 GPIO phy reset */
+
+			    pinctrl-0 = <&pinctrl_macb0_rmii>;
+			};
+
 			rtc@fffffeb0 {
 				status = "okay";
+			};
+
+			spi0: spi@f0000000 {
+				status = "okay";
+				cs-gpios = <&pioD 7 0>, <0>, <0>, <0>;
+				rt;
+			    spidev@0 {
+			        compatible = "spidev";
+			        spi-cpha;
+			        spi-max-frequency = <1000000>;
+			        reg = <0>;
+			    };
+			};
+
+			spi1: spi@f0004000 {
+			    status = "okay";
+			    cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
+			    spidev@0 {
+			        compatible = "spidev";
+			        spi-max-frequency = <3000000>;
+			        reg = <0>;
+			    };
 			};
 
 			mmc0: mmc@f0008000 {
@@ -97,42 +127,12 @@
 				};
 			};
 
-			ssc0: ssc@f0010000 {
-				status = "disabled";
-			};
-
-            macb0: ethernet@f802c000 {
-                phy-mode = "rmii";
-                status = "okay";
-				phy-reset-gpios = <&pioD 15 0>; /* PD15 GPIO phy reset */
-
-                pinctrl-0 = <&pinctrl_macb0_rmii>;
-            };
-
-			spi0: spi@f0000000 {
-				status = "okay";
-				cs-gpios = <&pioD 7 0>, <0>, <0>, <0>;
-				rt;
-                spidev@0 {
-                    compatible = "spidev";
-                    spi-cpha;
-                    spi-max-frequency = <1000000>;
-                    reg = <0>;
-                };
-			};
-
-			spi1: spi@f0004000 {
-			    status = "okay";
-                cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
-                spidev@0 {
-                    compatible = "spidev";
-                    spi-max-frequency = <3000000>;
-                    reg = <0>;
-                };
-            };
-
 			watchdog@fffffe40 {
 				status = "okay";
+			};
+
+			ssc0: ssc@f0010000 {
+				status = "disabled";
 			};
 		};
 

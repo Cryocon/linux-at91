@@ -45,6 +45,128 @@
     };
 
 	ahb {
+		apb {
+			macb0: ethernet@f802c000 {
+			    phy-mode = "rmii";
+			    status = "okay";
+				phy-reset-gpios = <&pioD 15 0>; /* PD15 GPIO phy reset */
+
+			    pinctrl-0 = <&pinctrl_macb0_rmii>;
+			};
+
+			rtc@fffffeb0 {
+				status = "okay";
+			};
+
+			spi0: spi@f0000000 {
+				status = "okay";
+				cs-gpios = <&pioA 14 0>, <&pioA 7 0>, <&pioA 1 0>, <&pioA 29 0>, <0>;
+				rt;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-cpha;
+                    spi-max-frequency = <1000000>;
+                    reg = <0>;
+                };
+                spidev@1 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <1>;
+                };
+                spidev@2 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <2>;
+                };
+                spidev@3 {
+                    compatible = "spidev";
+                    spi-max-frequency = <1000000>;
+                    reg = <3>;	// PA29 is a NC placeholder for GPIO chip selects
+                };
+			};
+
+			spi1: spi@f0004000 {
+			    status = "okay";
+                cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
+                spidev@0 {
+                    compatible = "spidev";
+                    spi-max-frequency = <3000000>;
+                    reg = <0>;
+                };
+            };
+
+			mmc0: mmc@f0008000 {
+				pinctrl-0 = <
+					&pinctrl_mmc0_slot0_clk_cmd_dat0
+					&pinctrl_mmc0_slot0_dat1_3>;
+				status = "okay";
+				slot@0 {
+					reg = <0>;
+					bus-width = <4>;
+					cd-gpios = <0>;
+					non-removable;
+				};
+			};
+
+			mmc1: mmc@f000c000 {
+				status = "disabled";
+			};
+
+			dbgu: serial@fffff200 {
+				status = "okay";
+			};
+
+			usart1: serial@f8020000 {
+				status = "okay";
+			};
+
+			i2c0: i2c@f8010000 {
+				status = "okay";
+				lm73@49 {
+					compatible = "lm73";
+					reg = <0x49>;
+					status = "okay";
+				};
+				24c512@50 {
+					compatible = "24c512";
+					reg = <0x50>;
+					pagesize = <128>;
+					status = "okay";
+				};
+			};
+
+			pinctrl@fffff400 {
+				nand0 {
+					pinctrl_nand0_m18: nand0_m18 {
+						atmel,pins =
+							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
+					};
+				};
+
+				user_io {
+				    pinctrl_user_io: user_io0 {
+				        atmel,pins = <1 18 0x0 0x0>;
+				    };
+				};
+			};
+
+			watchdog@fffffe40 {
+				status = "okay";
+			};
+
+			ssc0: ssc@f0010000 {
+				status = "disabled";
+			};
+		};
+
+		usb0: ohci@00600000 {
+			status = "disabled";
+		};
+
+		usb1: ehci@00700000 {
+			status = "disabled";
+		};
+
 		nand0: nand@40000000 {
 			nand-bus-width = <8>;
 			nand-ecc-mode = "hw";
@@ -99,128 +221,6 @@
 				label = "rootfs2";
 				reg = <0xa000000 0x6000000>;
 			};
-		};
-			
-		apb {
-			rtc@fffffeb0 {
-				status = "okay";
-			};
-
-			mmc0: mmc@f0008000 {
-				pinctrl-0 = <
-					&pinctrl_mmc0_slot0_clk_cmd_dat0
-					&pinctrl_mmc0_slot0_dat1_3>;
-				status = "okay";
-				slot@0 {
-					reg = <0>;
-					bus-width = <4>;
-					cd-gpios = <0>;
-					non-removable;
-				};
-			};
-			
-			mmc1: mmc@f000c000 {
-				status = "disabled";
-			};
-
-			dbgu: serial@fffff200 {
-				status = "okay";
-			};
-
-			usart1: serial@f8020000 {
-				status = "okay";
-			};
-
-			i2c0: i2c@f8010000 {
-				status = "okay";
-				lm73@49 {
-					compatible = "lm73";
-					reg = <0x49>;
-					status = "okay";
-				};
-				24c512@50 {
-					compatible = "24c512";
-					reg = <0x50>;
-					pagesize = <128>;
-					status = "okay";
-				};
-			};
-
-			pinctrl@fffff400 {
-				nand0 {
-					pinctrl_nand0_m18: nand0_m18 {
-						atmel,pins =
-							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
-					};
-				};
-
-				user_io {
-				    pinctrl_user_io: user_io0 {
-				        atmel,pins = <1 18 0x0 0x0>;
-				    };
-				};
-			};
-
-			ssc0: ssc@f0010000 {
-				status = "disabled";
-			};
-
-            macb0: ethernet@f802c000 {
-                phy-mode = "rmii";
-                status = "okay";
-				phy-reset-gpios = <&pioD 15 0>; /* PD15 GPIO phy reset */
-
-                pinctrl-0 = <&pinctrl_macb0_rmii>;
-            };
-
-			spi0: spi@f0000000 {
-				status = "okay";
-				cs-gpios = <&pioA 14 0>, <&pioA 7 0>, <&pioA 1 0>, <&pioA 29 0>, <0>;
-				rt;
-                spidev@0 {
-                    compatible = "spidev";
-                    spi-cpha;
-                    spi-max-frequency = <1000000>;
-                    reg = <0>;
-                };
-                spidev@1 {
-                    compatible = "spidev";
-                    spi-max-frequency = <1000000>;
-                    reg = <1>;
-                };
-                spidev@2 {
-                    compatible = "spidev";
-                    spi-max-frequency = <1000000>;
-                    reg = <2>;
-                };
-                spidev@3 {
-                    compatible = "spidev";
-                    spi-max-frequency = <1000000>;
-                    reg = <3>;	// PA29 is a NC placeholder for GPIO chip selects	
-                };
-			};
-
-			spi1: spi@f0004000 {
-			    status = "okay";
-                cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
-                spidev@0 {
-                    compatible = "spidev";
-                    spi-max-frequency = <3000000>;
-                    reg = <0>;
-                };
-            };
-
-			watchdog@fffffe40 {
-				status = "okay";
-			};
-		};
-
-		usb0: ohci@00600000 {
-			status = "disabled";
-		};
-
-		usb1: ehci@00700000 {
-			status = "disabled";
 		};
 	};
 
