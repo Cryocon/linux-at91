@@ -25,6 +25,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/util_macros.h>
+#include <linux/of.h>
 
 enum tc654_regs {
 	TC654_REG_RPM1 = 0x00,	/* RPM Output 1 */
@@ -457,6 +458,15 @@ static struct attribute *tc654_attrs[] = {
 
 ATTRIBUTE_GROUPS(tc654);
 
+#ifdef CONFIG_OF
+static const struct of_device_id tc654_of_ids[] = {
+	{ .compatible = "microchip,tc654" },
+	{ .compatible = "microchip,tc655" },
+	{ },
+};
+MODULE_DEVICE_TABLE(of, tc654_of_ids);
+#endif
+
 /*
  * device probe and removal
  */
@@ -502,6 +512,7 @@ MODULE_DEVICE_TABLE(i2c, tc654_id);
 static struct i2c_driver tc654_driver = {
 	.driver = {
 		   .name = "tc654",
+		   .of_match_table = of_match_ptr(tc654_of_ids),
 		   },
 	.probe = tc654_probe,
 	.id_table = tc654_id,
