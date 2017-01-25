@@ -13,6 +13,7 @@
  */
 
 #include <media/rc-core.h>
+#include <linux/atomic.h>
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/input.h>
@@ -129,13 +130,18 @@ static struct rc_map_list empty_map = {
 static int ir_create_table(struct rc_map *rc_map,
 			   const char *name, u64 rc_type, size_t size)
 {
-	rc_map->name = name;
+	rc_map->name = kstrdup(name, GFP_KERNEL);
+	if (!rc_map->name)
+		return -ENOMEM;
 	rc_map->rc_type = rc_type;
 	rc_map->alloc = roundup_pow_of_two(size * sizeof(struct rc_map_table));
 	rc_map->size = rc_map->alloc / sizeof(struct rc_map_table);
 	rc_map->scan = kmalloc(rc_map->alloc, GFP_KERNEL);
-	if (!rc_map->scan)
+	if (!rc_map->scan) {
+		kfree(rc_map->name);
+		rc_map->name = NULL;
 		return -ENOMEM;
+	}
 
 	IR_dprintk(1, "Allocated space for %u keycode entries (%u bytes)\n",
 		   rc_map->size, rc_map->alloc);
@@ -152,6 +158,7 @@ static int ir_create_table(struct rc_map *rc_map,
 static void ir_free_table(struct rc_map *rc_map)
 {
 	rc_map->size = 0;
+	kfree(rc_map->name);
 	kfree(rc_map->scan);
 	rc_map->scan = NULL;
 }
@@ -723,6 +730,7 @@ int rc_open(struct rc_dev *rdev)
 		return -EINVAL;
 
 	mutex_lock(&rdev->lock);
+
 	if (!rdev->users++ && rdev->open != NULL)
 		rval = rdev->open(rdev);
 
@@ -787,7 +795,9 @@ static const struct {
 	{ RC_BIT_UNKNOWN,	"unknown",	NULL			},
 	{ RC_BIT_RC5 |
 	  RC_BIT_RC5X,		"rc-5",		"ir-rc5-decoder"	},
-	{ RC_BIT_NEC,		"nec",		"ir-nec-decoder"	},
+	{ RC_BIT_NEC |
+	  RC_BIT_NECX |
+	  RC_BIT_NEC32,		"nec",		"ir-nec-decoder"	},
 	{ RC_BIT_RC6_0 |
 	  RC_BIT_RC6_6A_20 |
 	  RC_BIT_RC6_6A_24 |
@@ -802,6 +812,7 @@ static const struct {
 	{ RC_BIT_SHARP,		"sharp",	"ir-sharp-decoder"	},
 	{ RC_BIT_MCE_KBD,	"mce_kbd",	"ir-mce_kbd-decoder"	},
 	{ RC_BIT_XMP,		"xmp",		"ir-xmp-decoder"	},
+	{ RC_BIT_CEC,		"cec",		NULL			},
 };
 
 /**
@@ -872,6 +883,9 @@ static ssize_t show_protocols(struct device *device,
 	/* Device is being removed */
 	if (!dev)
 		return -EINVAL;
+
+	if (!atomic_read(&dev->initialized))
+		return -ERESTARTSYS;
 
 	mutex_lock(&dev->lock);
 
@@ -1054,6 +1068,9 @@ static ssize_t store_protocols(struct device *device,
 	if (!dev)
 		return -EINVAL;
 
+	if (!atomic_read(&dev->initialized))
+		return -ERESTARTSYS;
+
 	if (fattr->type == RC_FILTER_NORMAL) {
 		IR_dprintk(1, "Normal protocol change requested\n");
 		current_protocols = &dev->enabled_protocols;
@@ -1154,12 +1171,16 @@ static ssize_t show_filter(struct device *device,
 	if (!dev)
 		return -EINVAL;
 
+	if (!atomic_read(&dev->initialized))
+		return -ERESTARTSYS;
+
+	mutex_lock(&dev->lock);
+
 	if (fattr->type == RC_FILTER_NORMAL)
 		filter = &dev->scancode_filter;
 	else
 		filter = &dev->scancode_wakeup_filter;
 
-	mutex_lock(&dev->lock);
 	if (fattr->mask)
 		val = filter->mask;
 	else
@@ -1203,6 +1224,9 @@ static ssize_t store_filter(struct device *device,
 	/* Device is being removed */
 	if (!dev)
 		return -EINVAL;
+
+	if (!atomic_read(&dev->initialized))
+		return -ERESTARTSYS;
 
 	ret = kstrtoul(buf, 0, &val);
 	if (ret < 0)
@@ -1248,6 +1272,9 @@ unlock:
 
 static void rc_dev_release(struct device *device)
 {
+	struct rc_dev *dev = to_rc_dev(device);
+
+	kfree(dev);
 }
 
 #define ADD_HOTPLUG_VAR(fmt, val...)					\
@@ -1369,7 +1396,9 @@ void rc_free_device(struct rc_dev *dev)
 
 	put_device(&dev->dev);
 
-	kfree(dev);
+	/* kfree(dev) will be called by the callback function
+	   rc_dev_release() */
+
 	module_put(THIS_MODULE);
 }
 EXPORT_SYMBOL_GPL(rc_free_device);
@@ -1408,6 +1437,7 @@ int rc_register_device(struct rc_dev *dev)
 	dev->minor = minor;
 	dev_set_name(&dev->dev, "rc%u", dev->minor);
 	dev_set_drvdata(&dev->dev, dev);
+	atomic_set(&dev->initialized, 0);
 
 	dev->dev.groups = dev->sysfs_groups;
 	dev->sysfs_groups[attr++] = &rc_dev_protocol_attr_grp;
@@ -1418,14 +1448,6 @@ int rc_register_device(struct rc_dev *dev)
 	if (dev->change_wakeup_protocol)
 		dev->sysfs_groups[attr++] = &rc_dev_wakeup_protocol_attr_grp;
 	dev->sysfs_groups[attr++] = NULL;
-
-	/*
-	 * Take the lock here, as the device sysfs node will appear
-	 * when device_add() is called, which may trigger an ir-keytable udev
-	 * rule, which will in turn call show_protocols and access
-	 * dev->enabled_protocols before it has been initialized.
-	 */
-	mutex_lock(&dev->lock);
 
 	rc = device_add(&dev->dev);
 	if (rc)
@@ -1440,13 +1462,7 @@ int rc_register_device(struct rc_dev *dev)
 	dev->input_dev->phys = dev->input_phys;
 	dev->input_dev->name = dev->input_name;
 
-	/* input_register_device can call ir_open, so unlock mutex here */
-	mutex_unlock(&dev->lock);
-
 	rc = input_register_device(dev->input_dev);
-
-	mutex_lock(&dev->lock);
-
 	if (rc)
 		goto out_table;
 
@@ -1475,10 +1491,7 @@ int rc_register_device(struct rc_dev *dev)
 			request_module_nowait("ir-lirc-codec");
 			raw_init = true;
 		}
-		/* calls ir_register_device so unlock mutex here*/
-		mutex_unlock(&dev->lock);
 		rc = ir_raw_event_register(dev);
-		mutex_lock(&dev->lock);
 		if (rc < 0)
 			goto out_input;
 	}
@@ -1491,7 +1504,8 @@ int rc_register_device(struct rc_dev *dev)
 		dev->enabled_protocols = rc_type;
 	}
 
-	mutex_unlock(&dev->lock);
+	/* Allow the RC sysfs nodes to be accessible */
+	atomic_set(&dev->initialized, 1);
 
 	IR_dprintk(1, "Registered rc%u (driver: %s, remote: %s, mode %s)\n",
 		   dev->minor,
@@ -1512,7 +1526,6 @@ out_table:
 out_dev:
 	device_del(&dev->dev);
 out_unlock:
-	mutex_unlock(&dev->lock);
 	ida_simple_remove(&rc_ida, minor);
 	return rc;
 }

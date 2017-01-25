@@ -31,7 +31,6 @@
 #include "exynos_drm_plane.h"
 #include "exynos_drm_drv.h"
 #include "exynos_drm_fb.h"
-#include "exynos_drm_fbdev.h"
 #include "exynos_drm_iommu.h"
 
 /*
@@ -60,7 +59,6 @@ struct decon_context {
 	wait_queue_head_t		wait_vsync_queue;
 	atomic_t			wait_vsync_event;
 
-	struct exynos_drm_panel_info panel;
 	struct drm_encoder *encoder;
 };
 
@@ -594,7 +592,6 @@ static const struct exynos_drm_crtc_ops decon_crtc_ops = {
 	.commit = decon_commit,
 	.enable_vblank = decon_enable_vblank,
 	.disable_vblank = decon_disable_vblank,
-	.wait_for_vblank = decon_wait_for_vblank,
 	.atomic_begin = decon_atomic_begin,
 	.update_plane = decon_update_plane,
 	.disable_plane = decon_disable_plane,
@@ -606,7 +603,6 @@ static irqreturn_t decon_irq_handler(int irq, void *dev_id)
 {
 	struct decon_context *ctx = (struct decon_context *)dev_id;
 	u32 val, clear_bit;
-	int win;
 
 	val = readl(ctx->regs + VIDINTCON1);
 
@@ -620,14 +616,6 @@ static irqreturn_t decon_irq_handler(int irq, void *dev_id)
 
 	if (!ctx->i80_if) {
 		drm_crtc_handle_vblank(&ctx->crtc->base);
-		for (win = 0 ; win < WINDOWS_NR ; win++) {
-			struct exynos_drm_plane *plane = &ctx->planes[win];
-
-			if (!plane->pending_fb)
-				continue;
-
-			exynos_drm_crtc_finish_update(ctx->crtc, plane);
-		}
 
 		/* set wait vsync event to zero and wake up queue. */
 		if (atomic_read(&ctx->wait_vsync_event)) {

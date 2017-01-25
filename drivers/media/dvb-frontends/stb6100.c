@@ -346,7 +346,7 @@ static int stb6100_set_frequency(struct dvb_frontend *fe, u32 frequency)
 
 	if (fe->ops.get_frontend) {
 		dprintk(verbose, FE_DEBUG, 1, "Get frontend parameters");
-		fe->ops.get_frontend(fe);
+		fe->ops.get_frontend(fe, p);
 	}
 	srate = p->symbol_rate;
 
@@ -522,7 +522,7 @@ static int stb6100_set_params(struct dvb_frontend *fe)
 	return 0;
 }
 
-static struct dvb_tuner_ops stb6100_ops = {
+static const struct dvb_tuner_ops stb6100_ops = {
 	.info = {
 		.name			= "STB6100 Silicon Tuner",
 		.frequency_min		= 950000,

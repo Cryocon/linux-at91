@@ -721,6 +721,9 @@ static int ci_get_platdata(struct device *dev,
 		return ret;
 	}
 
+	if (of_find_property(dev->of_node, "non-zero-ttctrl-ttha", NULL))
+		platdata->flags |= CI_HDRC_SET_NON_ZERO_TTHA;
+
 	ext_id = ERR_PTR(-ENODEV);
 	ext_vbus = ERR_PTR(-ENODEV);
 	if (of_property_read_bool(dev->of_node, "extcon")) {
@@ -911,6 +914,7 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 	if (!ci)
 		return -ENOMEM;
 
+	spin_lock_init(&ci->lock);
 	ci->dev = dev;
 	ci->platdata = dev_get_platdata(dev);
 	ci->imx28_write_fix = !!(ci->platdata->flags &

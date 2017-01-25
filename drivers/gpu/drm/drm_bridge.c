@@ -23,10 +23,9 @@
 
 #include <linux/err.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 
-#include <drm/drm_crtc.h>
-
-#include "drm/drmP.h"
+#include <drm/drm_bridge.h>
 
 /**
  * DOC: overview
@@ -36,7 +35,7 @@
  * encoder chain.
  *
  * A bridge is always attached to a single &drm_encoder at a time, but can be
- * either connected to it directly, or through an intermediate bridge:
+ * either connected to it directly, or through an intermediate bridge::
  *
  *     encoder ---> bridge B ---> bridge A
  *
@@ -98,11 +97,11 @@ EXPORT_SYMBOL(drm_bridge_remove);
  * @dev: DRM device
  * @bridge: bridge control structure
  *
- * called by a kms driver to link one of our encoder/bridge to the given
+ * Called by a kms driver to link one of our encoder/bridge to the given
  * bridge.
  *
  * Note that setting up links between the bridge and our encoder/bridge
- * objects needs to be handled by the kms driver itself
+ * objects needs to be handled by the kms driver itself.
  *
  * RETURNS:
  * Zero on success, error code on failure
@@ -123,6 +122,31 @@ int drm_bridge_attach(struct drm_device *dev, struct drm_bridge *bridge)
 	return 0;
 }
 EXPORT_SYMBOL(drm_bridge_attach);
+
+/**
+ * drm_bridge_detach - deassociate given bridge from its DRM device
+ *
+ * @bridge: bridge control structure
+ *
+ * Called by a kms driver to unlink the given bridge from its DRM device.
+ *
+ * Note that tearing down links between the bridge and our encoder/bridge
+ * objects needs to be handled by the kms driver itself.
+ */
+void drm_bridge_detach(struct drm_bridge *bridge)
+{
+	if (WARN_ON(!bridge))
+		return;
+
+	if (WARN_ON(!bridge->dev))
+		return;
+
+	if (bridge->funcs->detach)
+		bridge->funcs->detach(bridge);
+
+	bridge->dev = NULL;
+}
+EXPORT_SYMBOL(drm_bridge_detach);
 
 /**
  * DOC: bridge callbacks
@@ -186,7 +210,8 @@ void drm_bridge_disable(struct drm_bridge *bridge)
 
 	drm_bridge_disable(bridge->next);
 
-	bridge->funcs->disable(bridge);
+	if (bridge->funcs->disable)
+		bridge->funcs->disable(bridge);
 }
 EXPORT_SYMBOL(drm_bridge_disable);
 
@@ -206,7 +231,8 @@ void drm_bridge_post_disable(struct drm_bridge *bridge)
 	if (!bridge)
 		return;
 
-	bridge->funcs->post_disable(bridge);
+	if (bridge->funcs->post_disable)
+		bridge->funcs->post_disable(bridge);
 
 	drm_bridge_post_disable(bridge->next);
 }
@@ -256,7 +282,8 @@ void drm_bridge_pre_enable(struct drm_bridge *bridge)
 
 	drm_bridge_pre_enable(bridge->next);
 
-	bridge->funcs->pre_enable(bridge);
+	if (bridge->funcs->pre_enable)
+		bridge->funcs->pre_enable(bridge);
 }
 EXPORT_SYMBOL(drm_bridge_pre_enable);
 
@@ -276,7 +303,8 @@ void drm_bridge_enable(struct drm_bridge *bridge)
 	if (!bridge)
 		return;
 
-	bridge->funcs->enable(bridge);
+	if (bridge->funcs->enable)
+		bridge->funcs->enable(bridge);
 
 	drm_bridge_enable(bridge->next);
 }

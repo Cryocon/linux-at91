@@ -37,6 +37,7 @@
 #include "cypress_ps2.h"
 #include "focaltech.h"
 #include "vmmouse.h"
+#include "byd.h"
 
 #define DRIVER_DESC	"PS/2 mouse driver"
 
@@ -840,6 +841,15 @@ static const struct psmouse_protocol psmouse_protocols[] = {
 		.alias		= "vmmouse",
 		.detect		= vmmouse_detect,
 		.init		= vmmouse_init,
+	},
+#endif
+#ifdef CONFIG_MOUSE_PS2_BYD
+	{
+		.type		= PSMOUSE_BYD,
+		.name		= "BYDPS/2",
+		.alias		= "byd",
+		.detect		= byd_detect,
+		.init		= byd_init,
 	},
 #endif
 	{
@@ -1902,7 +1912,7 @@ static int __init psmouse_init(void)
 	synaptics_module_init();
 	hgpk_module_init();
 
-	kpsmoused_wq = create_singlethread_workqueue("kpsmoused");
+	kpsmoused_wq = alloc_ordered_workqueue("kpsmoused", 0);
 	if (!kpsmoused_wq) {
 		pr_err("failed to create kpsmoused workqueue\n");
 		return -ENOMEM;

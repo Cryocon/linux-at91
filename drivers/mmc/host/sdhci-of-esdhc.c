@@ -49,7 +49,7 @@ static u32 esdhc_readl_fixup(struct sdhci_host *host,
 				     int spec_reg, u32 value)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-	struct sdhci_esdhc *esdhc = pltfm_host->priv;
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
 	u32 ret;
 
 	/*
@@ -66,6 +66,20 @@ static u32 esdhc_readl_fixup(struct sdhci_host *host,
 			return ret;
 		}
 	}
+	/*
+	 * The DAT[3:0] line signal levels and the CMD line signal level are
+	 * not compatible with standard SDHC register. The line signal levels
+	 * DAT[7:0] are at bits 31:24 and the command line signal level is at
+	 * bit 23. All other bits are the same as in the standard SDHC
+	 * register.
+	 */
+	if (spec_reg == SDHCI_PRESENT_STATE) {
+		ret = value & 0x000fffff;
+		ret |= (value >> 4) & SDHCI_DATA_LVL_MASK;
+		ret |= (value << 1) & SDHCI_CMD_LVL;
+		return ret;
+	}
+
 	ret = value;
 	return ret;
 }
@@ -354,7 +368,7 @@ static void esdhc_le_writeb(struct sdhci_host *host, u8 val, int reg)
 static void esdhc_of_adma_workaround(struct sdhci_host *host, u32 intmask)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-	struct sdhci_esdhc *esdhc = pltfm_host->priv;
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
 	bool applicable;
 	dma_addr_t dmastart;
 	dma_addr_t dmanow;
@@ -404,7 +418,7 @@ static unsigned int esdhc_of_get_min_clock(struct sdhci_host *host)
 static void esdhc_of_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-	struct sdhci_esdhc *esdhc = pltfm_host->priv;
+	struct sdhci_esdhc *esdhc = sdhci_pltfm_priv(pltfm_host);
 	int pre_div = 1;
 	int div = 1;
 	u32 temp;
@@ -481,7 +495,7 @@ static void esdhc_reset(struct sdhci_host *host, u8 mask)
 	sdhci_writel(host, host->ier, SDHCI_SIGNAL_ENABLE);
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static u32 esdhc_proctl;
 static int esdhc_of_suspend(struct device *dev)
 {
@@ -504,15 +518,11 @@ static int esdhc_of_resume(struct device *dev)
 	}
 	return ret;
 }
-
-static const struct dev_pm_ops esdhc_pmops = {
-	.suspend	= esdhc_of_suspend,
-	.resume		= esdhc_of_resume,
-};
-#define ESDHC_PMOPS (&esdhc_pmops)
-#else
-#define ESDHC_PMOPS NULL
 #endif
+
+static SIMPLE_DEV_PM_OPS(esdhc_of_dev_pm_ops,
+			esdhc_of_suspend,
+			esdhc_of_resume);
 
 static const struct sdhci_ops sdhci_esdhc_be_ops = {
 	.read_l = esdhc_be_readl,
@@ -569,15 +579,12 @@ static void esdhc_init(struct platform_device *pdev, struct sdhci_host *host)
 	u16 host_ver;
 
 	pltfm_host = sdhci_priv(host);
-	esdhc = devm_kzalloc(&pdev->dev, sizeof(struct sdhci_esdhc),
-			     GFP_KERNEL);
+	esdhc = sdhci_pltfm_priv(pltfm_host);
 
 	host_ver = sdhci_readw(host, SDHCI_HOST_VERSION);
 	esdhc->vendor_ver = (host_ver & SDHCI_VENDOR_VER_MASK) >>
 			     SDHCI_VENDOR_VER_SHIFT;
 	esdhc->spec_ver = host_ver & SDHCI_SPEC_VER_MASK;
-
-	pltfm_host->priv = esdhc;
 }
 
 static int sdhci_esdhc_probe(struct platform_device *pdev)
@@ -590,10 +597,12 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 
 	np = pdev->dev.of_node;
 
-	if (of_get_property(np, "little-endian", NULL))
-		host = sdhci_pltfm_init(pdev, &sdhci_esdhc_le_pdata, 0);
+	if (of_property_read_bool(np, "little-endian"))
+		host = sdhci_pltfm_init(pdev, &sdhci_esdhc_le_pdata,
+					sizeof(struct sdhci_esdhc));
 	else
-		host = sdhci_pltfm_init(pdev, &sdhci_esdhc_be_pdata, 0);
+		host = sdhci_pltfm_init(pdev, &sdhci_esdhc_be_pdata,
+					sizeof(struct sdhci_esdhc));
 
 	if (IS_ERR(host))
 		return PTR_ERR(host);
@@ -603,7 +612,7 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
 	sdhci_get_of_property(pdev);
 
 	pltfm_host = sdhci_priv(host);
-	esdhc = pltfm_host->priv;
+	esdhc = sdhci_pltfm_priv(pltfm_host);
 	if (esdhc->vendor_ver == VENDOR_V_22)
 		host->quirks2 |= SDHCI_QUIRK2_HOST_NO_CMD23;
 
@@ -658,7 +667,7 @@ static struct platform_driver sdhci_esdhc_driver = {
 	.driver = {
 		.name = "sdhci-esdhc",
 		.of_match_table = sdhci_esdhc_of_match,
-		.pm = ESDHC_PMOPS,
+		.pm = &esdhc_of_dev_pm_ops,
 	},
 	.probe = sdhci_esdhc_probe,
 	.remove = sdhci_pltfm_unregister,

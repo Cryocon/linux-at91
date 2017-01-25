@@ -1027,6 +1027,8 @@ static int __device_suspend_noirq(struct device *dev, pm_message_t state, bool a
 	TRACE_DEVICE(dev);
 	TRACE_SUSPEND(0);
 
+	dpm_wait_for_children(dev, async);
+
 	if (async_error)
 		goto Complete;
 
@@ -1037,8 +1039,6 @@ static int __device_suspend_noirq(struct device *dev, pm_message_t state, bool a
 
 	if (dev->power.syscore || dev->power.direct_complete)
 		goto Complete;
-
-	dpm_wait_for_children(dev, async);
 
 	if (dev->pm_domain) {
 		info = "noirq power domain ";
@@ -1174,6 +1174,8 @@ static int __device_suspend_late(struct device *dev, pm_message_t state, bool as
 
 	__pm_runtime_disable(dev, false);
 
+	dpm_wait_for_children(dev, async);
+
 	if (async_error)
 		goto Complete;
 
@@ -1184,8 +1186,6 @@ static int __device_suspend_late(struct device *dev, pm_message_t state, bool as
 
 	if (dev->power.syscore || dev->power.direct_complete)
 		goto Complete;
-
-	dpm_wait_for_children(dev, async);
 
 	if (dev->pm_domain) {
 		info = "late power domain ";
@@ -1557,7 +1557,6 @@ int dpm_suspend(pm_message_t state)
 static int device_prepare(struct device *dev, pm_message_t state)
 {
 	int (*callback)(struct device *) = NULL;
-	char *info = NULL;
 	int ret = 0;
 
 	if (dev->power.syscore)
@@ -1580,24 +1579,17 @@ static int device_prepare(struct device *dev, pm_message_t state)
 		goto unlock;
 	}
 
-	if (dev->pm_domain) {
-		info = "preparing power domain ";
+	if (dev->pm_domain)
 		callback = dev->pm_domain->ops.prepare;
-	} else if (dev->type && dev->type->pm) {
-		info = "preparing type ";
+	else if (dev->type && dev->type->pm)
 		callback = dev->type->pm->prepare;
-	} else if (dev->class && dev->class->pm) {
-		info = "preparing class ";
+	else if (dev->class && dev->class->pm)
 		callback = dev->class->pm->prepare;
-	} else if (dev->bus && dev->bus->pm) {
-		info = "preparing bus ";
+	else if (dev->bus && dev->bus->pm)
 		callback = dev->bus->pm->prepare;
-	}
 
-	if (!callback && dev->driver && dev->driver->pm) {
-		info = "preparing driver ";
+	if (!callback && dev->driver && dev->driver->pm)
 		callback = dev->driver->pm->prepare;
-	}
 
 	if (callback)
 		ret = callback(dev);

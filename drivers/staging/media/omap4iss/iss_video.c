@@ -19,8 +19,10 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/module.h>
+
 #include <media/v4l2-dev.h>
 #include <media/v4l2-ioctl.h>
+#include <media/v4l2-mc.h>
 
 #include "iss_video.h"
 #include "iss.h"
@@ -221,7 +223,7 @@ iss_video_far_end(struct iss_video *video)
 		if (entity == &video->video.entity)
 			continue;
 
-		if (!is_media_entity_v4l2_io(entity))
+		if (!is_media_entity_v4l2_video_device(entity))
 			continue;
 
 		far_end = to_iss_video(media_entity_to_video_device(entity));
@@ -296,7 +298,7 @@ iss_video_check_format(struct iss_video *video, struct iss_video_fh *vfh)
 
 static int iss_video_queue_setup(struct vb2_queue *vq,
 				 unsigned int *count, unsigned int *num_planes,
-				 unsigned int sizes[], void *alloc_ctxs[])
+				 unsigned int sizes[], struct device *alloc_devs[])
 {
 	struct iss_video_fh *vfh = vb2_get_drv_priv(vq);
 	struct iss_video *video = vfh->video;
@@ -307,8 +309,6 @@ static int iss_video_queue_setup(struct vb2_queue *vq,
 	sizes[0] = vfh->format.fmt.pix.sizeimage;
 	if (sizes[0] == 0)
 		return -EINVAL;
-
-	alloc_ctxs[0] = video->alloc_ctx;
 
 	*count = min(*count, video->capture_mem / PAGE_ALIGN(sizes[0]));
 
@@ -646,6 +646,103 @@ iss_video_try_format(struct file *file, void *fh, struct v4l2_format *format)
 }
 
 static int
+iss_video_get_selection(struct file *file, void *fh, struct v4l2_selection *sel)
+{
+	struct iss_video *video = video_drvdata(file);
+	struct v4l2_subdev_format format;
+	struct v4l2_subdev *subdev;
+	struct v4l2_subdev_selection sdsel = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.target = sel->target,
+	};
+	u32 pad;
+	int ret;
+
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+		if (video->type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+			return -EINVAL;
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+		if (video->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
+	}
+	subdev = iss_video_remote_subdev(video, &pad);
+	if (subdev == NULL)
+		return -EINVAL;
+
+	/* Try the get selection operation first and fallback to get format if not
+	 * implemented.
+	 */
+	sdsel.pad = pad;
+	ret = v4l2_subdev_call(subdev, pad, get_selection, NULL, &sdsel);
+	if (!ret)
+		sel->r = sdsel.r;
+	if (ret != -ENOIOCTLCMD)
+		return ret;
+
+	format.pad = pad;
+	format.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	ret = v4l2_subdev_call(subdev, pad, get_fmt, NULL, &format);
+	if (ret < 0)
+		return ret == -ENOIOCTLCMD ? -ENOTTY : ret;
+
+	sel->r.left = 0;
+	sel->r.top = 0;
+	sel->r.width = format.format.width;
+	sel->r.height = format.format.height;
+
+	return 0;
+}
+
+static int
+iss_video_set_selection(struct file *file, void *fh, struct v4l2_selection *sel)
+{
+	struct iss_video *video = video_drvdata(file);
+	struct v4l2_subdev *subdev;
+	struct v4l2_subdev_selection sdsel = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.target = sel->target,
+		.flags = sel->flags,
+		.r = sel->r,
+	};
+	u32 pad;
+	int ret;
+
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+		if (video->type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+			return -EINVAL;
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+		if (video->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
+	}
+	subdev = iss_video_remote_subdev(video, &pad);
+	if (subdev == NULL)
+		return -EINVAL;
+
+	sdsel.pad = pad;
+	mutex_lock(&video->mutex);
+	ret = v4l2_subdev_call(subdev, pad, set_selection, NULL, &sdsel);
+	mutex_unlock(&video->mutex);
+	if (!ret)
+		sel->r = sdsel.r;
+
+	return ret == -ENOIOCTLCMD ? -ENOTTY : ret;
+}
+
+static int
 iss_video_get_param(struct file *file, void *fh, struct v4l2_streamparm *a)
 {
 	struct iss_video_fh *vfh = to_iss_video_fh(fh);
@@ -971,6 +1068,8 @@ static const struct v4l2_ioctl_ops iss_video_ioctl_ops = {
 	.vidioc_g_fmt_vid_out		= iss_video_get_format,
 	.vidioc_s_fmt_vid_out		= iss_video_set_format,
 	.vidioc_try_fmt_vid_out		= iss_video_try_format,
+	.vidioc_g_selection		= iss_video_get_selection,
+	.vidioc_s_selection		= iss_video_set_selection,
 	.vidioc_g_parm			= iss_video_get_param,
 	.vidioc_s_parm			= iss_video_set_param,
 	.vidioc_reqbufs			= iss_video_reqbufs,
@@ -1009,21 +1108,8 @@ static int iss_video_open(struct file *file)
 		goto done;
 	}
 
-	ret = media_entity_graph_walk_init(&handle->graph,
-					   &video->iss->media_dev);
-	if (ret)
-		goto done;
-
-	ret = omap4iss_pipeline_pm_use(&video->video.entity, 1,
-				       &handle->graph);
+	ret = v4l2_pipeline_pm_use(&video->video.entity, 1);
 	if (ret < 0) {
-		omap4iss_put(video->iss);
-		goto done;
-	}
-
-	video->alloc_ctx = vb2_dma_contig_init_ctx(video->iss->dev);
-	if (IS_ERR(video->alloc_ctx)) {
-		ret = PTR_ERR(video->alloc_ctx);
 		omap4iss_put(video->iss);
 		goto done;
 	}
@@ -1037,6 +1123,7 @@ static int iss_video_open(struct file *file)
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct iss_buffer);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+	q->dev = video->iss->dev;
 
 	ret = vb2_queue_init(q);
 	if (ret) {
@@ -1054,7 +1141,6 @@ static int iss_video_open(struct file *file)
 done:
 	if (ret < 0) {
 		v4l2_fh_del(&handle->vfh);
-		media_entity_graph_walk_cleanup(&handle->graph);
 		kfree(handle);
 	}
 
@@ -1070,13 +1156,11 @@ static int iss_video_release(struct file *file)
 	/* Disable streaming and free the buffers queue resources. */
 	iss_video_streamoff(file, vfh, video->type);
 
-	omap4iss_pipeline_pm_use(&video->video.entity, 0, &handle->graph);
+	v4l2_pipeline_pm_use(&video->video.entity, 0);
 
 	/* Release the videobuf2 queue */
 	vb2_queue_release(&handle->queue);
 
-	/* Release the file handle. */
-	media_entity_graph_walk_cleanup(&handle->graph);
 	v4l2_fh_del(vfh);
 	kfree(handle);
 	file->private_data = NULL;

@@ -288,6 +288,20 @@ struct hisi_sas_complete_v1_hdr {
 	__le32 data;
 };
 
+struct hisi_sas_err_record_v1 {
+	/* dw0 */
+	__le32 dma_err_type;
+
+	/* dw1 */
+	__le32 trans_tx_fail_type;
+
+	/* dw2 */
+	__le32 trans_rx_fail_type;
+
+	/* dw3 */
+	u32 rsvd;
+};
+
 enum {
 	HISI_SAS_PHY_BCAST_ACK = 0,
 	HISI_SAS_PHY_SL_PHY_ENABLED,
@@ -392,6 +406,8 @@ enum {
 	TRANS_RX_SMP_RESP_TIMEOUT_ERR, /* 0x31a */
 };
 
+#define HISI_SAS_COMMAND_ENTRIES_V1_HW 8192
+
 #define HISI_SAS_PHY_MAX_INT_NR (HISI_SAS_PHY_INT_NR * HISI_SAS_MAX_PHYS)
 #define HISI_SAS_CQ_MAX_INT_NR (HISI_SAS_MAX_QUEUES)
 #define HISI_SAS_FATAL_INT_NR (2)
@@ -474,23 +490,15 @@ static void config_id_frame_v1_hw(struct hisi_hba *hisi_hba, int phy_no)
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD0,
 			__swab32(identify_buffer[0]));
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD1,
-			identify_buffer[2]);
+			__swab32(identify_buffer[1]));
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD2,
-			identify_buffer[1]);
+			__swab32(identify_buffer[2]));
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD3,
-			identify_buffer[4]);
+			__swab32(identify_buffer[3]));
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD4,
-			identify_buffer[3]);
+			__swab32(identify_buffer[4]));
 	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD5,
 			__swab32(identify_buffer[5]));
-}
-
-static void init_id_frame_v1_hw(struct hisi_hba *hisi_hba)
-{
-	int i;
-
-	for (i = 0; i < hisi_hba->n_phy; i++)
-		config_id_frame_v1_hw(hisi_hba, i);
 }
 
 static void setup_itct_v1_hw(struct hisi_hba *hisi_hba,
@@ -607,31 +615,42 @@ static int reset_hw_v1_hw(struct hisi_hba *hisi_hba)
 			return -EIO;
 	}
 
-	/* Apply reset and disable clock */
-	/* clk disable reg is offset by +4 bytes from clk enable reg */
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg,
-		     RESET_VALUE);
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg + 4,
-		     RESET_VALUE);
-	msleep(1);
-	regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
-	if (RESET_VALUE != (val & RESET_VALUE)) {
-		dev_err(dev, "Reset failed\n");
-		return -EIO;
-	}
+	if (ACPI_HANDLE(dev)) {
+		acpi_status s;
 
-	/* De-reset and enable clock */
-	/* deassert rst reg is offset by +4 bytes from assert reg */
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg + 4,
-		     RESET_VALUE);
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg,
-		     RESET_VALUE);
-	msleep(1);
-	regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
-	if (val & RESET_VALUE) {
-		dev_err(dev, "De-reset failed\n");
-		return -EIO;
-	}
+		s = acpi_evaluate_object(ACPI_HANDLE(dev), "_RST", NULL, NULL);
+		if (ACPI_FAILURE(s)) {
+			dev_err(dev, "Reset failed\n");
+			return -EIO;
+		}
+	} else if (hisi_hba->ctrl) {
+		/* Apply reset and disable clock */
+		/* clk disable reg is offset by +4 bytes from clk enable reg */
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg,
+			     RESET_VALUE);
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg + 4,
+			     RESET_VALUE);
+		msleep(1);
+		regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
+		if (RESET_VALUE != (val & RESET_VALUE)) {
+			dev_err(dev, "Reset failed\n");
+			return -EIO;
+		}
+
+		/* De-reset and enable clock */
+		/* deassert rst reg is offset by +4 bytes from assert reg */
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg + 4,
+			     RESET_VALUE);
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg,
+			     RESET_VALUE);
+		msleep(1);
+		regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
+		if (val & RESET_VALUE) {
+			dev_err(dev, "De-reset failed\n");
+			return -EIO;
+		}
+	} else
+		dev_warn(dev, "no reset method\n");
 
 	return 0;
 }
@@ -747,8 +766,6 @@ static int hw_init_v1_hw(struct hisi_hba *hisi_hba)
 	msleep(100);
 	init_reg_v1_hw(hisi_hba);
 
-	init_id_frame_v1_hw(hisi_hba);
-
 	return 0;
 }
 
@@ -848,12 +865,13 @@ static int get_wideport_bitmap_v1_hw(struct hisi_hba *hisi_hba, int port_id)
 static int get_free_slot_v1_hw(struct hisi_hba *hisi_hba, int *q, int *s)
 {
 	struct device *dev = &hisi_hba->pdev->dev;
+	struct hisi_sas_dq *dq;
 	u32 r, w;
 	int queue = hisi_hba->queue;
 
 	while (1) {
-		w = hisi_sas_read32_relaxed(hisi_hba,
-				    DLVRY_Q_0_WR_PTR + (queue * 0x14));
+		dq = &hisi_hba->dq[queue];
+		w = dq->wr_point;
 		r = hisi_sas_read32_relaxed(hisi_hba,
 				    DLVRY_Q_0_RD_PTR + (queue * 0x14));
 		if (r == (w+1) % HISI_SAS_QUEUE_SLOTS) {
@@ -876,10 +894,11 @@ static void start_delivery_v1_hw(struct hisi_hba *hisi_hba)
 {
 	int dlvry_queue = hisi_hba->slot_prep->dlvry_queue;
 	int dlvry_queue_slot = hisi_hba->slot_prep->dlvry_queue_slot;
+	struct hisi_sas_dq *dq = &hisi_hba->dq[dlvry_queue];
 
-	hisi_sas_write32(hisi_hba,
-			 DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14),
-			 ++dlvry_queue_slot % HISI_SAS_QUEUE_SLOTS);
+	dq->wr_point = ++dlvry_queue_slot % HISI_SAS_QUEUE_SLOTS;
+	hisi_sas_write32(hisi_hba, DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14),
+			 dq->wr_point);
 }
 
 static int prep_prd_sge_v1_hw(struct hisi_hba *hisi_hba,
@@ -1096,7 +1115,7 @@ static void slot_err_v1_hw(struct hisi_hba *hisi_hba,
 			   struct hisi_sas_slot *slot)
 {
 	struct task_status_struct *ts = &task->task_status;
-	struct hisi_sas_err_record *err_record = slot->status_buffer;
+	struct hisi_sas_err_record_v1 *err_record = slot->status_buffer;
 	struct device *dev = &hisi_hba->pdev->dev;
 
 	switch (task->task_proto) {
@@ -1185,6 +1204,14 @@ static void slot_err_v1_hw(struct hisi_hba *hisi_hba,
 			ts->stat = SAS_NAK_R_ERR;
 			break;
 		}
+		case TRANS_TX_CREDIT_TIMEOUT_ERR:
+		case TRANS_TX_CLOSE_NORMAL_ERR:
+		{
+			/* This will request a retry */
+			ts->stat = SAS_QUEUE_FULL;
+			slot->abort = 1;
+			break;
+		}
 		default:
 		{
 			ts->stat = SAM_STAT_CHECK_CONDITION;
@@ -1220,7 +1247,6 @@ static int slot_complete_v1_hw(struct hisi_hba *hisi_hba,
 	struct domain_device *device;
 	enum exec_status sts;
 	struct hisi_sas_complete_v1_hdr *complete_queue =
-			(struct hisi_sas_complete_v1_hdr *)
 			hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_v1_hdr *complete_hdr;
 	u32 cmplt_hdr_data;
@@ -1293,6 +1319,11 @@ static int slot_complete_v1_hw(struct hisi_hba *hisi_hba,
 		!(cmplt_hdr_data & CMPLT_HDR_RSPNS_XFRD_MSK)) {
 
 		slot_err_v1_hw(hisi_hba, task, slot);
+		if (unlikely(slot->abort)) {
+			queue_work(hisi_hba->wq, &slot->abort_slot);
+			/* immediately return and do not complete */
+			return ts->stat;
+		}
 		goto out;
 	}
 
@@ -1526,14 +1557,11 @@ static irqreturn_t cq_interrupt_v1_hw(int irq, void *p)
 	struct hisi_sas_complete_v1_hdr *complete_queue =
 			(struct hisi_sas_complete_v1_hdr *)
 			hisi_hba->complete_hdr[queue];
-	u32 irq_value, rd_point, wr_point;
+	u32 irq_value, rd_point = cq->rd_point, wr_point;
 
 	irq_value = hisi_sas_read32(hisi_hba, OQ_INT_SRC);
 
 	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 1 << queue);
-
-	rd_point = hisi_sas_read32(hisi_hba,
-			COMPL_Q_0_RD_PTR + (0x14 * queue));
 	wr_point = hisi_sas_read32(hisi_hba,
 			COMPL_Q_0_WR_PTR + (0x14 * queue));
 
@@ -1561,6 +1589,7 @@ static irqreturn_t cq_interrupt_v1_hw(int irq, void *p)
 	}
 
 	/* update rd_point */
+	cq->rd_point = rd_point;
 	hisi_sas_write32(hisi_hba, COMPL_Q_0_RD_PTR + (0x14 * queue), rd_point);
 
 	return IRQ_HANDLED;
@@ -1796,6 +1825,7 @@ static const struct hisi_sas_hw hisi_sas_v1_hw = {
 	.phy_disable = disable_phy_v1_hw,
 	.phy_hard_reset = phy_hard_reset_v1_hw,
 	.get_wideport_bitmap = get_wideport_bitmap_v1_hw,
+	.max_command_entries = HISI_SAS_COMMAND_ENTRIES_V1_HW,
 	.complete_hdr_size = sizeof(struct hisi_sas_complete_v1_hdr),
 };
 
@@ -1815,12 +1845,20 @@ static const struct of_device_id sas_v1_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, sas_v1_of_match);
 
+static const struct acpi_device_id sas_v1_acpi_match[] = {
+	{ "HISI0161", 0 },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(acpi, sas_v1_acpi_match);
+
 static struct platform_driver hisi_sas_v1_driver = {
 	.probe = hisi_sas_v1_probe,
 	.remove = hisi_sas_v1_remove,
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = sas_v1_of_match,
+		.acpi_match_table = ACPI_PTR(sas_v1_acpi_match),
 	},
 };
 

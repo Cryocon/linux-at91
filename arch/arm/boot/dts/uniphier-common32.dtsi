@@ -1,7 +1,8 @@
 /*
  * Device Tree Source commonly used by UniPhier ARM SoCs
  *
- * Copyright (C) 2015 Masahiro Yamada <yamada.masahiro@socionext.com>
+ * Copyright (C) 2015-2016 Socionext Inc.
+ *   Author: Masahiro Yamada <yamada.masahiro@socionext.com>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -45,18 +46,24 @@
 /include/ "skeleton.dtsi"
 
 / {
+	psci {
+		compatible = "arm,psci-0.2";
+		method = "smc";
+	};
+
+	clocks {
+		refclk: ref {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+		};
+	};
+
 	soc: soc {
 		compatible = "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges;
 		interrupt-parent = <&intc>;
-
-		extbus: extbus {
-			compatible = "simple-bus";
-			#address-cells = <2>;
-			#size-cells = <1>;
-		};
 
 		serial0: serial@54006800 {
 			compatible = "socionext,uniphier-uart";
@@ -65,7 +72,7 @@
 			interrupts = <0 33 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_uart0>;
-			clocks = <&uart_clk>;
+			clocks = <&peri_clk 0>;
 		};
 
 		serial1: serial@54006900 {
@@ -75,7 +82,7 @@
 			interrupts = <0 35 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_uart1>;
-			clocks = <&uart_clk>;
+			clocks = <&peri_clk 1>;
 		};
 
 		serial2: serial@54006a00 {
@@ -85,7 +92,7 @@
 			interrupts = <0 37 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_uart2>;
-			clocks = <&uart_clk>;
+			clocks = <&peri_clk 2>;
 		};
 
 		serial3: serial@54006b00 {
@@ -95,12 +102,50 @@
 			interrupts = <0 177 4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_uart3>;
-			clocks = <&uart_clk>;
+			clocks = <&peri_clk 3>;
 		};
 
-		system-bus-controller@58c00000 {
-			compatible = "socionext,uniphier-system-bus-controller";
-			reg = <0x58c00000 0x400>, <0x59800000 0x2000>;
+		system_bus: system-bus@58c00000 {
+			compatible = "socionext,uniphier-system-bus";
+			status = "disabled";
+			reg = <0x58c00000 0x400>;
+			#address-cells = <2>;
+			#size-cells = <1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_system_bus>;
+		};
+
+		smpctrl@59800000 {
+			compatible = "socionext,uniphier-smpctrl";
+			reg = <0x59801000 0x400>;
+		};
+
+		mioctrl@59810000 {
+			compatible = "socionext,uniphier-mioctrl",
+				     "simple-mfd", "syscon";
+			reg = <0x59810000 0x800>;
+
+			mio_clk: clock {
+				#clock-cells = <1>;
+			};
+
+			mio_rst: reset {
+				#reset-cells = <1>;
+			};
+		};
+
+		perictrl@59820000 {
+			compatible = "socionext,uniphier-perictrl",
+				     "simple-mfd", "syscon";
+			reg = <0x59820000 0x200>;
+
+			peri_clk: clock {
+				#clock-cells = <1>;
+			};
+
+			peri_rst: reset {
+				#reset-cells = <1>;
+			};
 		};
 
 		timer@60000200 {
@@ -125,9 +170,28 @@
 			interrupt-controller;
 		};
 
-		pinctrl: pinctrl@5f801000 {
-			/* specify compatible in each SoC DTSI */
-			reg = <0x5f801000 0xe00>;
+		soc-glue@5f800000 {
+			compatible = "socionext,uniphier-soc-glue",
+				     "simple-mfd", "syscon";
+			reg = <0x5f800000 0x2000>;
+
+			pinctrl: pinctrl {
+				/* specify compatible in each SoC DTSI */
+			};
+		};
+
+		sysctrl@61840000 {
+			compatible = "socionext,uniphier-sysctrl",
+				     "simple-mfd", "syscon";
+			reg = <0x61840000 0x4000>;
+
+			sys_clk: clock {
+				#clock-cells = <1>;
+			};
+
+			sys_rst: reset {
+				#reset-cells = <1>;
+			};
 		};
 	};
 };

@@ -2125,7 +2125,7 @@ static int of_get_pxafb_display(struct device *dev, struct device_node *disp,
 
 	timings = of_get_display_timings(disp);
 	if (!timings)
-		goto out;
+		return -EINVAL;
 
 	ret = -ENOMEM;
 	info->modes = kmalloc_array(timings->num_timings,
@@ -2186,6 +2186,7 @@ static int of_get_pxafb_mode_info(struct device *dev,
 	ret = of_property_read_u32(np, "bus-width", &bus_width);
 	if (ret) {
 		dev_err(dev, "no bus-width specified: %d\n", ret);
+		of_node_put(np);
 		return ret;
 	}
 
@@ -2446,8 +2447,8 @@ static int pxafb_remove(struct platform_device *dev)
 
 	free_pages_exact(fbi->video_mem, fbi->video_mem_size);
 
-	dma_free_writecombine(&dev->dev, fbi->dma_buff_size,
-			fbi->dma_buff, fbi->dma_buff_phys);
+	dma_free_wc(&dev->dev, fbi->dma_buff_size, fbi->dma_buff,
+		    fbi->dma_buff_phys);
 
 	iounmap(fbi->mmio_base);
 

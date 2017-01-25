@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 #include <linux/cpu.h>
 #include <linux/cpuidle.h>
+#include <linux/cpuhotplug.h>
 #include <linux/tick.h>
 #include <linux/mm.h>
 #include <linux/stackprotector.h>
@@ -14,6 +15,9 @@
 #include <trace/events/power.h>
 
 #include "sched.h"
+
+/* Linker adds these: start and end of __cpuidle functions */
+extern char __cpuidle_text_start[], __cpuidle_text_end[];
 
 /**
  * sched_idle_set_state - Record idle state for the current CPU.
@@ -52,7 +56,7 @@ static int __init cpu_idle_nopoll_setup(char *__unused)
 __setup("hlt", cpu_idle_nopoll_setup);
 #endif
 
-static inline int cpu_idle_poll(void)
+static noinline int __cpuidle cpu_idle_poll(void)
 {
 	rcu_idle_enter();
 	trace_cpu_idle_rcuidle(0, smp_processor_id());
@@ -83,7 +87,7 @@ void __weak arch_cpu_idle(void)
  *
  * To use when the cpuidle framework cannot be used.
  */
-void default_idle_call(void)
+void __cpuidle default_idle_call(void)
 {
 	if (current_clr_polling_and_test()) {
 		local_irq_enable();
@@ -126,7 +130,7 @@ static int call_cpuidle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
  */
 static void cpuidle_idle_call(void)
 {
-	struct cpuidle_device *dev = __this_cpu_read(cpuidle_devices);
+	struct cpuidle_device *dev = cpuidle_get_device();
 	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
 	int next_state, entered_state;
 
@@ -193,8 +197,6 @@ exit_idle:
 	rcu_idle_exit();
 }
 
-DEFINE_PER_CPU(bool, cpu_dead_idle);
-
 /*
  * Generic idle loop implementation
  *
@@ -202,6 +204,8 @@ DEFINE_PER_CPU(bool, cpu_dead_idle);
  */
 static void cpu_idle_loop(void)
 {
+	int cpu = smp_processor_id();
+
 	while (1) {
 		/*
 		 * If the arch has a polling bit, we maintain an invariant:
@@ -220,11 +224,8 @@ static void cpu_idle_loop(void)
 			check_pgt_cache();
 			rmb();
 
-			if (cpu_is_offline(smp_processor_id())) {
-				rcu_cpu_notify(NULL, CPU_DYING_IDLE,
-					       (void *)(long)smp_processor_id());
-				smp_mb(); /* all activity before dead. */
-				this_cpu_write(cpu_dead_idle, true);
+			if (cpu_is_offline(cpu)) {
+				cpuhp_report_idle_dead();
 				arch_cpu_idle_dead();
 			}
 
@@ -273,6 +274,12 @@ static void cpu_idle_loop(void)
 	}
 }
 
+bool cpu_in_idle(unsigned long pc)
+{
+	return pc >= (unsigned long)__cpuidle_text_start &&
+		pc < (unsigned long)__cpuidle_text_end;
+}
+
 void cpu_startup_entry(enum cpuhp_state state)
 {
 	/*
@@ -291,5 +298,6 @@ void cpu_startup_entry(enum cpuhp_state state)
 	boot_init_stack_canary();
 #endif
 	arch_cpu_idle_prepare();
+	cpuhp_online_idle(state);
 	cpu_idle_loop();
 }

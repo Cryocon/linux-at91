@@ -977,7 +977,7 @@ static const struct v4l2_subdev_ops tvp514x_ops = {
 	.pad = &tvp514x_pad_ops,
 };
 
-static struct tvp514x_decoder tvp514x_dev = {
+static const struct tvp514x_decoder tvp514x_dev = {
 	.streaming = 0,
 	.fmt_list = tvp514x_fmt_list,
 	.num_fmts = ARRAY_SIZE(tvp514x_fmt_list),
@@ -1001,7 +1001,7 @@ static struct tvp514x_decoder tvp514x_dev = {
 static struct tvp514x_platform_data *
 tvp514x_get_pdata(struct i2c_client *client)
 {
-	struct tvp514x_platform_data *pdata;
+	struct tvp514x_platform_data *pdata = NULL;
 	struct v4l2_of_endpoint bus_cfg;
 	struct device_node *endpoint;
 	unsigned int flags;
@@ -1013,11 +1013,13 @@ tvp514x_get_pdata(struct i2c_client *client)
 	if (!endpoint)
 		return NULL;
 
+	if (v4l2_of_parse_endpoint(endpoint, &bus_cfg))
+		goto done;
+
 	pdata = devm_kzalloc(&client->dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
 		goto done;
 
-	v4l2_of_parse_endpoint(endpoint, &bus_cfg);
 	flags = bus_cfg.bus.parallel.flags;
 
 	if (flags & V4L2_MBUS_HSYNC_ACTIVE_HIGH)
@@ -1231,7 +1233,6 @@ MODULE_DEVICE_TABLE(of, tvp514x_of_match);
 static struct i2c_driver tvp514x_driver = {
 	.driver = {
 		.of_match_table = of_match_ptr(tvp514x_of_match),
-		.owner = THIS_MODULE,
 		.name = TVP514X_MODULE_NAME,
 	},
 	.probe = tvp514x_probe,

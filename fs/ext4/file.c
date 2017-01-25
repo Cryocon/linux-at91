@@ -91,32 +91,28 @@ ext4_unaligned_aio(struct inode *inode, struct iov_iter *from, loff_t pos)
 static ssize_t
 ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
-	struct file *file = iocb->ki_filp;
 	struct inode *inode = file_inode(iocb->ki_filp);
-	struct mutex *aio_mutex = NULL;
-	struct blk_plug plug;
 	int o_direct = iocb->ki_flags & IOCB_DIRECT;
+	int unaligned_aio = 0;
 	int overwrite = 0;
 	ssize_t ret;
-
-	/*
-	 * Unaligned direct AIO must be serialized; see comment above
-	 * In the case of O_APPEND, assume that we must always serialize
-	 */
-	if (o_direct &&
-	    ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS) &&
-	    !is_sync_kiocb(iocb) &&
-	    (iocb->ki_flags & IOCB_APPEND ||
-	     ext4_unaligned_aio(inode, from, iocb->ki_pos))) {
-		aio_mutex = ext4_aio_mutex(inode);
-		mutex_lock(aio_mutex);
-		ext4_unwritten_wait(inode);
-	}
 
 	inode_lock(inode);
 	ret = generic_write_checks(iocb, from);
 	if (ret <= 0)
 		goto out;
+
+	/*
+	 * Unaligned direct AIO must be serialized among each other as zeroing
+	 * of partial blocks of two competing unaligned AIOs can result in data
+	 * corruption.
+	 */
+	if (o_direct && ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS) &&
+	    !is_sync_kiocb(iocb) &&
+	    ext4_unaligned_aio(inode, from, iocb->ki_pos)) {
+		unaligned_aio = 1;
+		ext4_unwritten_wait(inode);
+	}
 
 	/*
 	 * If we have encountered a bitmap-format file, the size limit
@@ -136,18 +132,16 @@ ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (o_direct) {
 		size_t length = iov_iter_count(from);
 		loff_t pos = iocb->ki_pos;
-		blk_start_plug(&plug);
 
 		/* check whether we do a DIO overwrite or not */
-		if (ext4_should_dioread_nolock(inode) && !aio_mutex &&
-		    !file->f_mapping->nrpages && pos + length <= i_size_read(inode)) {
+		if (ext4_should_dioread_nolock(inode) && !unaligned_aio &&
+		    pos + length <= i_size_read(inode)) {
 			struct ext4_map_blocks map;
 			unsigned int blkbits = inode->i_blkbits;
 			int err, len;
 
 			map.m_lblk = pos >> blkbits;
-			map.m_len = (EXT4_BLOCK_ALIGN(pos + length, blkbits) >> blkbits)
-				- map.m_lblk;
+			map.m_len = EXT4_MAX_BLOCKS(length, pos, blkbits);
 			len = map.m_len;
 
 			err = ext4_map_blocks(NULL, inode, &map, 0);
@@ -171,24 +165,13 @@ ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	ret = __generic_file_write_iter(iocb, from);
 	inode_unlock(inode);
 
-	if (ret > 0) {
-		ssize_t err;
+	if (ret > 0)
+		ret = generic_write_sync(iocb, ret);
 
-		err = generic_write_sync(file, iocb->ki_pos - ret, ret);
-		if (err < 0)
-			ret = err;
-	}
-	if (o_direct)
-		blk_finish_plug(&plug);
-
-	if (aio_mutex)
-		mutex_unlock(aio_mutex);
 	return ret;
 
 out:
 	inode_unlock(inode);
-	if (aio_mutex)
-		mutex_unlock(aio_mutex);
 	return ret;
 }
 
@@ -213,7 +196,7 @@ static int ext4_dax_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (IS_ERR(handle))
 		result = VM_FAULT_SIGBUS;
 	else
-		result = __dax_fault(vma, vmf, ext4_dax_mmap_get_block, NULL);
+		result = dax_fault(vma, vmf, ext4_dax_get_block);
 
 	if (write) {
 		if (!IS_ERR(handle))
@@ -248,8 +231,8 @@ static int ext4_dax_pmd_fault(struct vm_area_struct *vma, unsigned long addr,
 	if (IS_ERR(handle))
 		result = VM_FAULT_SIGBUS;
 	else
-		result = __dax_pmd_fault(vma, addr, pmd, flags,
-				ext4_dax_mmap_get_block, NULL);
+		result = dax_pmd_fault(vma, addr, pmd, flags,
+					 ext4_dax_get_block);
 
 	if (write) {
 		if (!IS_ERR(handle))
@@ -314,10 +297,10 @@ static int ext4_file_mmap(struct file *file, struct vm_area_struct *vma)
 	struct inode *inode = file->f_mapping->host;
 
 	if (ext4_encrypted_inode(inode)) {
-		int err = ext4_get_encryption_info(inode);
+		int err = fscrypt_get_encryption_info(inode);
 		if (err)
 			return 0;
-		if (ext4_encryption_info(inode) == NULL)
+		if (!fscrypt_has_encryption_key(inode))
 			return -ENOKEY;
 	}
 	file_accessed(file);
@@ -373,18 +356,18 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
 		}
 	}
 	if (ext4_encrypted_inode(inode)) {
-		ret = ext4_get_encryption_info(inode);
+		ret = fscrypt_get_encryption_info(inode);
 		if (ret)
 			return -EACCES;
-		if (ext4_encryption_info(inode) == NULL)
+		if (!fscrypt_has_encryption_key(inode))
 			return -ENOKEY;
 	}
 
 	dir = dget_parent(file_dentry(filp));
 	if (ext4_encrypted_inode(d_inode(dir)) &&
-	    !ext4_is_child_context_consistent_with_parent(d_inode(dir), inode)) {
+			!fscrypt_has_permitted_context(d_inode(dir), inode)) {
 		ext4_warning(inode->i_sb,
-			     "Inconsistent encryption contexts: %lu/%lu\n",
+			     "Inconsistent encryption contexts: %lu/%lu",
 			     (unsigned long) d_inode(dir)->i_ino,
 			     (unsigned long) inode->i_ino);
 		dput(dir);
@@ -421,7 +404,7 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
  */
 static int ext4_find_unwritten_pgoff(struct inode *inode,
 				     int whence,
-				     struct ext4_map_blocks *map,
+				     ext4_lblk_t end_blk,
 				     loff_t *offset)
 {
 	struct pagevec pvec;
@@ -436,10 +419,10 @@ static int ext4_find_unwritten_pgoff(struct inode *inode,
 	blkbits = inode->i_sb->s_blocksize_bits;
 	startoff = *offset;
 	lastoff = startoff;
-	endoff = (loff_t)(map->m_lblk + map->m_len) << blkbits;
+	endoff = (loff_t)end_blk << blkbits;
 
-	index = startoff >> PAGE_CACHE_SHIFT;
-	end = endoff >> PAGE_CACHE_SHIFT;
+	index = startoff >> PAGE_SHIFT;
+	end = endoff >> PAGE_SHIFT;
 
 	pagevec_init(&pvec, 0);
 	do {
@@ -554,12 +537,11 @@ out:
 static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 {
 	struct inode *inode = file->f_mapping->host;
-	struct ext4_map_blocks map;
 	struct extent_status es;
 	ext4_lblk_t start, last, end;
 	loff_t dataoff, isize;
 	int blkbits;
-	int ret = 0;
+	int ret;
 
 	inode_lock(inode);
 
@@ -576,41 +558,32 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 	dataoff = offset;
 
 	do {
-		map.m_lblk = last;
-		map.m_len = end - last + 1;
-		ret = ext4_map_blocks(NULL, inode, &map, 0);
-		if (ret > 0 && !(map.m_flags & EXT4_MAP_UNWRITTEN)) {
-			if (last != start)
-				dataoff = (loff_t)last << blkbits;
-			break;
+		ret = ext4_get_next_extent(inode, last, end - last + 1, &es);
+		if (ret <= 0) {
+			/* No extent found -> no data */
+			if (ret == 0)
+				ret = -ENXIO;
+			inode_unlock(inode);
+			return ret;
 		}
 
-		/*
-		 * If there is a delay extent at this offset,
-		 * it will be as a data.
-		 */
-		ext4_es_find_delayed_extent_range(inode, last, last, &es);
-		if (es.es_len != 0 && in_range(last, es.es_lblk, es.es_len)) {
-			if (last != start)
-				dataoff = (loff_t)last << blkbits;
+		last = es.es_lblk;
+		if (last != start)
+			dataoff = (loff_t)last << blkbits;
+		if (!ext4_es_is_unwritten(&es))
 			break;
-		}
 
 		/*
 		 * If there is a unwritten extent at this offset,
 		 * it will be as a data or a hole according to page
 		 * cache that has data or not.
 		 */
-		if (map.m_flags & EXT4_MAP_UNWRITTEN) {
-			int unwritten;
-			unwritten = ext4_find_unwritten_pgoff(inode, SEEK_DATA,
-							      &map, &dataoff);
-			if (unwritten)
-				break;
-		}
-
-		last++;
+		if (ext4_find_unwritten_pgoff(inode, SEEK_DATA,
+					      es.es_lblk + es.es_len, &dataoff))
+			break;
+		last += es.es_len;
 		dataoff = (loff_t)last << blkbits;
+		cond_resched();
 	} while (last <= end);
 
 	inode_unlock(inode);
@@ -627,12 +600,11 @@ static loff_t ext4_seek_data(struct file *file, loff_t offset, loff_t maxsize)
 static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 {
 	struct inode *inode = file->f_mapping->host;
-	struct ext4_map_blocks map;
 	struct extent_status es;
 	ext4_lblk_t start, last, end;
 	loff_t holeoff, isize;
 	int blkbits;
-	int ret = 0;
+	int ret;
 
 	inode_lock(inode);
 
@@ -649,44 +621,30 @@ static loff_t ext4_seek_hole(struct file *file, loff_t offset, loff_t maxsize)
 	holeoff = offset;
 
 	do {
-		map.m_lblk = last;
-		map.m_len = end - last + 1;
-		ret = ext4_map_blocks(NULL, inode, &map, 0);
-		if (ret > 0 && !(map.m_flags & EXT4_MAP_UNWRITTEN)) {
-			last += ret;
-			holeoff = (loff_t)last << blkbits;
-			continue;
+		ret = ext4_get_next_extent(inode, last, end - last + 1, &es);
+		if (ret < 0) {
+			inode_unlock(inode);
+			return ret;
 		}
-
-		/*
-		 * If there is a delay extent at this offset,
-		 * we will skip this extent.
-		 */
-		ext4_es_find_delayed_extent_range(inode, last, last, &es);
-		if (es.es_len != 0 && in_range(last, es.es_lblk, es.es_len)) {
-			last = es.es_lblk + es.es_len;
-			holeoff = (loff_t)last << blkbits;
-			continue;
+		/* Found a hole? */
+		if (ret == 0 || es.es_lblk > last) {
+			if (last != start)
+				holeoff = (loff_t)last << blkbits;
+			break;
 		}
-
 		/*
 		 * If there is a unwritten extent at this offset,
 		 * it will be as a data or a hole according to page
 		 * cache that has data or not.
 		 */
-		if (map.m_flags & EXT4_MAP_UNWRITTEN) {
-			int unwritten;
-			unwritten = ext4_find_unwritten_pgoff(inode, SEEK_HOLE,
-							      &map, &holeoff);
-			if (!unwritten) {
-				last += ret;
-				holeoff = (loff_t)last << blkbits;
-				continue;
-			}
-		}
+		if (ext4_es_is_unwritten(&es) &&
+		    ext4_find_unwritten_pgoff(inode, SEEK_HOLE,
+					      last + es.es_len, &holeoff))
+			break;
 
-		/* find a hole */
-		break;
+		last += es.es_len;
+		holeoff = (loff_t)last << blkbits;
+		cond_resched();
 	} while (last <= end);
 
 	inode_unlock(inode);
@@ -739,6 +697,7 @@ const struct file_operations ext4_file_operations = {
 	.open		= ext4_file_open,
 	.release	= ext4_release_file,
 	.fsync		= ext4_sync_file,
+	.get_unmapped_area = thp_get_unmapped_area,
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= iter_file_splice_write,
 	.fallocate	= ext4_fallocate,
@@ -747,10 +706,7 @@ const struct file_operations ext4_file_operations = {
 const struct inode_operations ext4_file_inode_operations = {
 	.setattr	= ext4_setattr,
 	.getattr	= ext4_getattr,
-	.setxattr	= generic_setxattr,
-	.getxattr	= generic_getxattr,
 	.listxattr	= ext4_listxattr,
-	.removexattr	= generic_removexattr,
 	.get_acl	= ext4_get_acl,
 	.set_acl	= ext4_set_acl,
 	.fiemap		= ext4_fiemap,

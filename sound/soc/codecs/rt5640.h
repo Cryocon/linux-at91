@@ -12,6 +12,7 @@
 #ifndef _RT5640_H
 #define _RT5640_H
 
+#include <linux/clk.h>
 #include <sound/rt5640.h>
 
 /* Info */
@@ -983,6 +984,7 @@
 #define RT5640_SCLK_SRC_SFT			14
 #define RT5640_SCLK_SRC_MCLK			(0x0 << 14)
 #define RT5640_SCLK_SRC_PLL1			(0x1 << 14)
+#define RT5640_SCLK_SRC_RCCLK			(0x2 << 14)
 #define RT5640_PLL1_SRC_MASK			(0x3 << 12)
 #define RT5640_PLL1_SRC_SFT			12
 #define RT5640_PLL1_SRC_MCLK			(0x0 << 12)
@@ -2097,6 +2099,7 @@ struct rt5640_priv {
 	struct snd_soc_codec *codec;
 	struct rt5640_platform_data pdata;
 	struct regmap *regmap;
+	struct clk *mclk;
 
 	int sysclk;
 	int sysclk_src;
