@@ -346,7 +346,7 @@
 		};
 	};
 
-	spi-gpio-0 {
+	spi-gpio@0 {
 		compatible = "spi-gpio";
 		status = "okay";
 		#address-cells = <1>;
