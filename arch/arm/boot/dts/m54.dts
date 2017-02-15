@@ -44,6 +44,8 @@
         spi1 = &spi1;
         fpga0 = &fpga0;
         fpga1 = &fpga1;
+        spi0 = &spi_gpio_0;
+        spi1 = &spi_gpio_1;
     };
 
 	fpga0: xilinx-sscu@0 {
@@ -346,7 +348,7 @@
 		};
 	};
 
-	spi-gpio@0 {
+	spi_gpio_0: spi-gpio@0 {
 		compatible = "spi-gpio";
 		status = "okay";
 		#address-cells = <1>;
@@ -357,8 +359,40 @@
 		cs-gpios = <&pioA 14 0>,
 			<&pioA 7 0>, <0>;
 		num-chipselects = <2>;
+		pinctrl-0 = <&pinctrl_spi0>;
+		spidev@0 {
+			compatible = "spidev";
+			spi-max-frequency = <1000000>;
+			reg = <0>;
+		};
 		m25p40@1 {
 	        status = "okay";
+			reg = <1>;
+			compatible = "micron,m25p40";
+			spi-max-frequency = <2000000>;
+			mode = <0>;
+		};
+	};
+
+	spi_gpio_1: spi-gpio@1 {
+		compatible = "spi-gpio";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		gpio-miso = <&pioA 21 0>;
+		gpio-mosi = <&pioA 22 0>;
+		gpio-sck = <&pioA 23 0>;
+		cs-gpios = <&pioA 8 0>, <&pioA 0 0>, <0>;
+		num-chipselects = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_spi1>;
+		spidev@0 {
+			compatible = "spidev";
+			spi-max-frequency = <1000000>;
+			reg = <0>;
+		};
+		m25p40@1 {
+			status = "okay";
 			reg = <1>;
 			compatible = "micron,m25p40";
 			spi-max-frequency = <2000000>;
