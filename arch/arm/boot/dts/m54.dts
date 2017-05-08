@@ -70,7 +70,7 @@
         gpios = <&pioA 23 0
                 &pioC 1 0
                 &pioC 2 0
-                &pioA 2 0
+                &pioC 0 0
                 &pioA 22 0>;
     };
 
@@ -209,7 +209,7 @@
 		            pinctrl-0 = <&ft5316_pins>;
 		            interrupt-parent = <&pioB>;
 		            interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
-		            reset-gpios = <&pioB 12 0>;
+		            wakeup-gpios = <&pioB 14 0>;
 					status = "okay";
 				};
 				lm73@48 {
@@ -239,7 +239,7 @@
 				touch {
 					ft5316_pins: touch-board {
 				        atmel,pins =
-				            <AT91_PIOC 31 AT91_PERIPH_A AT91_PINCTRL_PULL_UP 
+				            <AT91_PIOB 14 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP
 				             AT91_PIOB 11 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP>;
 					};
 				};
@@ -267,16 +267,9 @@
 				            <AT91_PIOA 23 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOC  1 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
 				             AT91_PIOC  2 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
-				             AT91_PIOA  2 AT91_PERIPH_GPIO AT91_PINCTRL_NONE 
+				             AT91_PIOC  0 AT91_PERIPH_GPIO AT91_PINCTRL_NONE
 				             AT91_PIOA 22 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 				     };
-				};
-
-				nand0 {
-					pinctrl_nand0_m18: nand0_m18 {
-						atmel,pins =
-							<3 14 0x0 0x1>;	/* PD14 WP# pull up */
-					};
 				};
 
 				user_io {
@@ -298,7 +291,7 @@
 		usb0: ohci@00600000 {
 			status = "okay";
 			num-ports = <3>;
-			atmel,vbus-gpio = <0 /* &pioD 18 GPIO_ACTIVE_LOW *//* Activate to have access to port A */
+			atmel,vbus-gpio = <
 					   &pioD 19 GPIO_ACTIVE_HIGH
 					   &pioD 20 GPIO_ACTIVE_HIGH
 					  >;
@@ -323,7 +316,7 @@
 			pinctrl-0 = <&ft5316_pins>;
 			interrupt-parent = <&pioB>;
 			interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
-			reset-gpios = <&pioB 12 0>;
+			wakeup-gpios = <&pioB 14 0>;
 			status = "okay";
 		};
 		lm73_gpio@48 {
