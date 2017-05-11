@@ -44,8 +44,8 @@
         spi1 = &spi1;
         fpga0 = &fpga0;
         fpga1 = &fpga1;
-        spi0 = &spi_gpio_0;
-        spi1 = &spi_gpio_1;
+		spi-gpio0 = "/spi-gpio@0";
+		spi-gpio1 = "/spi-gpio@1";
     };
 
 	fpga0: xilinx-sscu@0 {
