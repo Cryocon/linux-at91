@@ -73,6 +73,8 @@
 			spi1: spi@f0004000 {
 			    status = "okay";
 			    cs-gpios = <&pioA 8 0>, <0>, <0>, <0>;
+				rt;
+				interrupts = <14 IRQ_TYPE_LEVEL_HIGH 6>;
 			    spidev@0 {
 			        compatible = "spidev";
 			        spi-max-frequency = <3000000>;
@@ -107,6 +109,7 @@
 
 			i2c0: i2c@f8010000 {
 				status = "okay";
+				interrupts = <9 IRQ_TYPE_LEVEL_HIGH 5>;
 				lm73@49 {
 					compatible = "lm73";
 					reg = <0x49>;
@@ -124,6 +127,9 @@
 				    pinctrl_user_io: user_io0 {
 				        atmel,pins = <1 18 0x0 0x0>;
 				    };
+				};
+				pioB: gpio@fffff600 {
+					interrupts = <2 IRQ_TYPE_LEVEL_HIGH 6>;
 				};
 			};
 
