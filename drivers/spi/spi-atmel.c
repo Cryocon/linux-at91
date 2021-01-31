@@ -255,10 +255,13 @@
 #define spi_writeb(port, reg, value) \
 	writeb_relaxed((value), (port)->regs + SPI_##reg)
 #endif
+
 /* use PIO for small transfers, avoiding DMA setup/teardown overhead and
  * cache operations; better heuristics consider wordsize and bitrate.
  */
-#define DMA_MIN_BYTES	16
+static unsigned int dma_min_bytes = 16;
+module_param(dma_min_bytes, uint, 0644);
+MODULE_PARM_DESC(dma_min_bytes, "minimum data bytes to try to use DMA instead of PIO");
 
 #define SPI_DMA_TIMEOUT		(msecs_to_jiffies(1000))
 
@@ -453,7 +456,7 @@ static void atmel_spi_unlock(struct atmel_spi *as) __releases(&as->lock)
 static inline bool atmel_spi_use_dma(struct atmel_spi *as,
 				struct spi_transfer *xfer)
 {
-	return as->use_dma && xfer->len >= DMA_MIN_BYTES;
+	return as->use_dma && xfer->len >= dma_min_bytes;
 }
 
 static int atmel_spi_dma_slave_config(struct atmel_spi *as,
